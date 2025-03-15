@@ -1,0 +1,266 @@
+import 'package:flutter/material.dart';
+import 'package:camera/camera.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:io';
+import 'package:image/image.dart' as img;
+import 'dart:typed_data';
+import 'package:http_parser/http_parser.dart'; // Ensure this import exists
+import 'package:mime/mime.dart'; // Add this import
+
+class CheckInScreen extends StatefulWidget {
+  @override
+  _CheckInScreenState createState() => _CheckInScreenState();
+}
+
+class _CheckInScreenState extends State<CheckInScreen> {
+  late CameraController _cameraController;
+  late Future<void> _initializeCameraController;
+  List<String> users = [];
+  String? selectedUser;
+  String? _capturedImagePath;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeCamera();
+    _fetchUsers();
+  }
+
+  void _initializeCamera() async {
+    final cameras = await availableCameras();
+    _cameraController = CameraController(cameras[1], ResolutionPreset.medium);
+    _initializeCameraController = _cameraController.initialize();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _fetchUsers() async {
+    try {
+      final response = await http.get(Uri.parse('http://192.168.0.200:8082/api/users'));
+      if (response.statusCode == 200) {
+        List<dynamic> data = json.decode(response.body);
+        setState(() {
+          users = data.map((user) => user['name'].toString()).toList();
+        });
+      } else {
+        throw Exception('Failed to load users');
+      }
+    } catch (e) {
+      print('Error fetching users: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _cameraController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _capturePhoto() async {
+    if (_cameraController.value.isInitialized) {
+      final XFile file = await _cameraController.takePicture();
+      File imageFile = File(file.path);
+
+      // Read image bytes
+      List<int> imageBytes = await imageFile.readAsBytes();
+      img.Image? image = img.decodeImage(Uint8List.fromList(imageBytes));
+
+      if (image != null) {
+        // Flip image horizontally
+        img.Image flippedImage = img.flipHorizontal(image);
+
+        // Save the flipped image
+        File flippedFile = File(file.path)..writeAsBytesSync(img.encodeJpg(flippedImage));
+
+        setState(() {
+          _capturedImagePath = flippedFile.path;
+        });
+      }
+    }
+  }
+
+// Required for dynamically detecting MIME type
+
+  Future<void> _submitData() async {
+    if (_capturedImagePath != null && selectedUser != null) {
+      try {
+        var request = http.MultipartRequest(
+          'POST',
+          Uri.parse('http://192.168.0.200:8082/api/users/verify'),
+        );
+
+        request.fields['name'] = selectedUser!;
+
+        // Dynamically determine MIME type (image/jpeg, image/png, etc.)
+        String? mimeType = lookupMimeType(_capturedImagePath!);
+        var mediaType = mimeType != null ? MediaType.parse(mimeType) : MediaType('image', 'jpg');
+
+        request.files.add(await http.MultipartFile.fromPath(
+          'file',
+          _capturedImagePath!,
+          contentType: mediaType, // Set correct MIME type
+        ));
+
+        // Debugging: Print request details
+        File file = File(_capturedImagePath!);
+        print('Sending Image File Path: $_capturedImagePath');
+        print('File Exists: ${file.existsSync()}');
+        print('File Size: ${await file.length()} bytes');
+        print('Detected MIME Type: $mimeType');
+
+        // Send request
+        var response = await request.send();
+        var responseBody = await response.stream.bytesToString();
+        print('Response: $responseBody');
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response.statusCode == 200 ? 'Response: $responseBody' : 'Error: $responseBody'),
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Exception: $e')),
+        );
+      }
+    }
+  }
+
+
+
+
+  void _onCaptureButtonPressed() async {
+    await _capturePhoto();
+    _submitData();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.teal.shade50,
+      appBar: AppBar(
+        backgroundColor: Colors.teal.shade50,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.teal.shade800),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          "Face Check-In",
+          style: TextStyle(
+            color: Colors.teal.shade800,
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+          ),
+        ),
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Select User", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: selectedUser,
+                      onChanged: (String? newValue) {
+                        setState(() => selectedUser = newValue);
+                      },
+                      items: users.map((String user) {
+                        return DropdownMenuItem<String>(
+                          value: user,
+                          child: Text(user),
+                        );
+                      }).toList(),
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    if (selectedUser != null)
+                      Text("Selected User: $selectedUser", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.teal.shade800)),
+                  ],
+                ),
+              ),
+              SizedBox(height: 10),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text("Position Your Face in the Frame", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 6),
+                    Stack(
+                      children: [
+                        Container(
+                          height: 440,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            color: Colors.teal.shade800,
+                          ),
+                          child: FutureBuilder<void>(
+                            future: _initializeCameraController,
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState == ConnectionState.done) {
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: CameraPreview(_cameraController),
+                                );
+                              } else {
+                                return Center(child: CircularProgressIndicator());
+                              }
+                            },
+                          ),
+                        ),
+                        if (_capturedImagePath != null)
+                          Positioned.fill(
+                            child: Opacity(
+                              opacity: 1,
+                              child: Image.file(
+                                File(_capturedImagePath!),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    Center(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(horizontal: 120, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: selectedUser == null ? null : _onCaptureButtonPressed,
+                        child: Text("Capture", style: TextStyle(fontSize: 16)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
