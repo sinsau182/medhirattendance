@@ -5,10 +5,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
-import 'package:http_parser/http_parser.dart'; // Ensure this import exists
-import 'package:mime/mime.dart'; // Add this import
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'attendance_popup.dart';
 
 class CheckInScreen extends StatefulWidget {
+  final String? prefilledUser;
+
+  const CheckInScreen({Key? key, this.prefilledUser}) : super(key: key);
+
   @override
   _CheckInScreenState createState() => _CheckInScreenState();
 }
@@ -25,9 +31,12 @@ class _CheckInScreenState extends State<CheckInScreen> {
     super.initState();
     _initializeCamera();
     _fetchUsers();
+    if (widget.prefilledUser != null) {
+      selectedUser = widget.prefilledUser;
+    }
   }
 
-  void _initializeCamera() async {
+  Future<void> _initializeCamera() async {
     final cameras = await availableCameras();
     _cameraController = CameraController(cameras[1], ResolutionPreset.medium);
     _initializeCameraController = _cameraController.initialize();
@@ -79,9 +88,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
     }
   }
 
-// Required for dynamically detecting MIME type
-
-  Future<void> _submitData() async {
+  Future<void> _submitData(BuildContext context) async {
     if (_capturedImagePath != null && selectedUser != null) {
       try {
         var request = http.MultipartRequest(
@@ -91,47 +98,70 @@ class _CheckInScreenState extends State<CheckInScreen> {
 
         request.fields['name'] = selectedUser!;
 
-        // Dynamically determine MIME type (image/jpeg, image/png, etc.)
-        String? mimeType = lookupMimeType(_capturedImagePath!);
-        var mediaType = mimeType != null ? MediaType.parse(mimeType) : MediaType('image', 'jpg');
+        // Determine MIME type
+        String? mimeType = lookupMimeType(_capturedImagePath!) ?? 'image/jpeg';
+        var mediaType = MediaType.parse(mimeType);
 
         request.files.add(await http.MultipartFile.fromPath(
           'file',
           _capturedImagePath!,
-          contentType: mediaType, // Set correct MIME type
+          contentType: mediaType,
         ));
-
-        // Debugging: Print request details
-        File file = File(_capturedImagePath!);
-        print('Sending Image File Path: $_capturedImagePath');
-        print('File Exists: ${file.existsSync()}');
-        print('File Size: ${await file.length()} bytes');
-        print('Detected MIME Type: $mimeType');
 
         // Send request
         var response = await request.send();
         var responseBody = await response.stream.bytesToString();
         print('Response: $responseBody');
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response.statusCode == 200 ? 'Response: $responseBody' : 'Error: $responseBody'),
-          ),
-        );
+        if (response.statusCode == 200) {
+          if (responseBody.contains('Present')) {
+            showAttendancePopup(context, true, () async {}, () {}, selectedUser!); // Show success popup
+          } else if (responseBody.contains('Absent')) {
+            showAttendancePopup(
+              context,
+              false,
+              () async {
+                Navigator.pop(context); // Close popup first
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CheckInScreen(
+                      prefilledUser: selectedUser, // Pass prefilled user
+                    ),
+                  ),
+                );
+              },
+              () {
+                showAttendancePopup(context, false, () async {}, () {}, selectedUser!); // Manual mark
+              },
+              selectedUser!, // Pass prefilled user
+            );
+          } else {
+            _showErrorSnackbar(context, "Unexpected response: $responseBody");
+          }
+        } else {
+          _showErrorSnackbar(context, "Server Error: $responseBody");
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Exception: $e')),
-        );
+        _showErrorSnackbar(context, "Exception: $e");
       }
+    } else {
+      _showErrorSnackbar(context, "Please select a user and capture an image.");
     }
   }
 
-
-
+  // Helper function to show error messages
+  void _showErrorSnackbar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
   void _onCaptureButtonPressed() async {
     await _capturePhoto();
-    _submitData();
+    if (context.mounted) {
+      _submitData(context);
+    }
   }
 
   @override
