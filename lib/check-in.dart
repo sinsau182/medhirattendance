@@ -36,7 +36,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
     }
   }
 
-  Future<void> _initializeCamera() async {
+  void _initializeCamera() async {
     final cameras = await availableCameras();
     _cameraController = CameraController(cameras[1], ResolutionPreset.medium);
     _initializeCameraController = _cameraController.initialize();

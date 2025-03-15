@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import 'login_page.dart';
 import 'check-in.dart';
 import 'register.dart';
+import 'view_attendance.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,6 +18,70 @@ class _HomePageState extends State<HomePage> {
   String username = "";
   int registeredUsers = 0;
   int checkInsToday = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchTotalUsers(); // Fetch total users on screen load
+    fetchCheckInsToday();
+  }
+
+  Future<void> fetchTotalUsers() async {
+    final url = Uri.parse('http://192.168.0.200:8082/api/users');
+
+    try {
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        List<dynamic> users = json.decode(response.body);
+        setState(() {
+          registeredUsers = users.length;
+        });
+      } else {
+        throw Exception('Failed to load users');
+      }
+    } catch (e) {
+      print('Error fetching users: $e');
+    }
+  }
+
+  Future<void> fetchCheckInsToday() async {
+    final url = Uri.parse('http://192.168.0.200:8082/attendance/all');
+
+    try {
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        List<dynamic> attendanceList = json.decode(response.body);
+
+        DateTime nowUtc = DateTime.now().toUtc();
+        String formattedDate = nowUtc.toIso8601String().split('T')[0]; // "YYYY-MM-DD"
+
+        int checkIns = attendanceList.where((entry) {
+          if (entry.containsKey('timestamp') && entry['timestamp'] is String) {
+            try {
+              DateTime entryTime = DateTime.parse(entry['timestamp']).toUtc();
+              String entryDate = entryTime.toIso8601String().split('T')[0];
+              return entryDate == formattedDate;
+            } catch (e) {
+              print('Error parsing timestamp: $e');
+              return false;
+            }
+          }
+          return false;
+        }).length;
+
+        setState(() {
+          checkInsToday = checkIns;
+        });
+      } else {
+        throw Exception('Failed to load attendance');
+      }
+    } catch (e) {
+      print('Error fetching attendance: $e');
+    }
+  }
+
 
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
@@ -162,12 +229,15 @@ class _HomePageState extends State<HomePage> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.bar_chart, color: Colors.white), // Changed to white
+                  const Icon(Icons.bar_chart, color: Colors.white),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextButton(
                       onPressed: () {
-                        // Add your view attendance function here
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => ViewAttendanceScreen()),
+                        );
                       },
                       child: const Text(
                         'View Attendance',
