@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -21,42 +22,38 @@ class _SalaryAdvanceFormState extends State<SalaryAdvanceForm> {
   String? _selectedRepaymentPlan = 'Lump Sum (One-time)';
   final List<String> _reasons = ['Medical Emergency', 'Education', 'Personal', 'Other'];
   final List<String> _repaymentPlans = ['Lump Sum (One-time)', 'Installments'];
-  String? _documentPath;
+  File? _documentFile;
 
   Future<void> _submitAdvanceRequest() async {
     final String apiUrl = 'http://192.168.0.200:8084/payroll/advance';
-    final Map<String, dynamic> advanceData = {
-      "employeeId": "emp123", // Replace with actual employee ID
-      "requestedAmount": double.tryParse(_amountController.text) ?? 0.0,
-      "reason": _selectedReason ?? "",
-      "repaymentPlan": _selectedRepaymentPlan ?? "",
-      "comments": _commentController.text,
-      "documentUrl": _documentPath ?? "",
-      "status": "PENDING"
-    };
 
-    print('Sending advance data: ${jsonEncode(advanceData)}');
+    var request = http.MultipartRequest('POST', Uri.parse(apiUrl));
+    request.fields['employeeId'] = "emp123"; // Replace with actual employee ID
+    request.fields['requestedAmount'] = _amountController.text;
+    request.fields['reason'] = _selectedReason ?? "";
+    request.fields['repaymentPlan'] = _selectedRepaymentPlan ?? "";
+    request.fields['comments'] = _commentController.text;
+
+    if (_documentFile != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath('file', _documentFile!.path),
+      );
+    }
+
+    print('Sending advance data: ${request.fields}');
 
     try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(advanceData),
-      );
-
+      var response = await request.send();
       if (response.statusCode == 200) {
-        // Handle successful submission
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Advance request submitted successfully!')),
         );
       } else {
-        // Handle error
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to submit advance request.')),
         );
       }
     } catch (e) {
-      // Handle exception
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
@@ -205,10 +202,10 @@ class _SalaryAdvanceFormState extends State<SalaryAdvanceForm> {
           allowedExtensions: ['jpg'],
         );
         if (result != null) {
-          String fileName = result.files.single.name;
-          _documentPath = result.files.single.path;
+          File file = File(result.files.single.path!);
           setState(() {
-            _documentController.text = fileName;
+            _documentFile = file;
+            _documentController.text = result.files.single.name;
           });
         }
       },

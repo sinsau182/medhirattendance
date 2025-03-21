@@ -21,41 +21,45 @@ class _ExpenseFormState extends State<ExpenseForm> {
 
   Future<void> _submitExpense() async {
     final String apiUrl = 'http://192.168.0.200:8084/payroll/expenses';
-    final Map<String, dynamic> expenseData = {
-      "employeeId": "emp123", // Replace with actual employee ID
-      "category": _categoryController.text,
-      "description": _descriptionController.text,
-      "amount": double.tryParse(_amountController.text) ?? 0.0,
-      "receiptUrl": _receiptPath ?? "",
-    };
-
-    print('Sending expense data: ${jsonEncode(expenseData)}');
 
     try {
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(expenseData),
-      );
+      var request = http.MultipartRequest('POST', Uri.parse(apiUrl));
 
-      if (response.statusCode == 201) {
-        // Handle successful submission
+      // Add form fields
+      request.fields['employeeId'] = 'emp123'; // Replace with actual employee ID
+      request.fields['category'] = _categoryController.text;
+      request.fields['description'] = _descriptionController.text;
+      request.fields['amount'] = (_amountController.text.isNotEmpty)
+          ? _amountController.text
+          : '0.0';
+
+      // Add receipt file if selected
+      if (_receiptPath != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath('receipt', _receiptPath!),
+        );
+      }
+
+      // Send request
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Expense submitted successfully!')),
         );
       } else {
-        // Handle error
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to submit expense.')),
+          SnackBar(content: Text('Failed to submit expense: ${response.body}')),
         );
       }
     } catch (e) {
-      // Handle exception
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
     }
   }
+
 
 
   @override

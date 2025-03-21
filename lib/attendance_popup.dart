@@ -53,30 +53,30 @@ void showAttendancePopup(
             ),
             const SizedBox(height: 20),
 
+
+
             if (!isSuccess)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   ElevatedButton(
                     onPressed: () async {
+
                       Navigator.pop(context); // Close popup first
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (context) => EmployeeDashboard()),
-                      );// Navigate to CheckInScreen
+                      Navigator.pop(context, false);// Navigate to CheckInScreen
                     },
+
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
                     child: const Text("Retry", style: TextStyle(color: Colors.white)),
                   ),
                   const SizedBox(width: 10),
                   ElevatedButton(
                     onPressed: () {
+
                       Navigator.pop(context); // Close popup first
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (context) => EmployeeDashboard()),
-                      ); // Navigate to HomePage
+                      Navigator.pop(context, false); // Navigate to HomePage
                     },
+
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
                     child: const Text("Mark Manually", style: TextStyle(color: Colors.white)),
                   ),

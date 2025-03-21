@@ -167,21 +167,16 @@ class _CheckInScreenState extends State<CheckInScreen> {
             widget.onCheckInSuccess?.call(); // Call fetchCheckInsToday
 
             Future.delayed(Duration(seconds: 1), () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => EmployeeDashboard()),
-              );
+              Navigator.pop(context);
+              Navigator.pop(context, true); // Close popup after 1 second
             });
           } else if (responseBody.contains('Absent')) {
             showAttendancePopup(
               context,
               false,
                   () async {
-                Navigator.pop(context); // Close popup first
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => EmployeeDashboard()),
-                );
+                    Navigator.pop(context);
+                    Navigator.pop(context, false);// Close popup first
               },
                   () {
                 showAttendancePopup(context, false, () async {}, () {}, selectedUser!); // Manual mark
