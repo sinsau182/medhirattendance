@@ -4,7 +4,8 @@ import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
-import 'package:http_parser/http_parser.dart'; // Add this import
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 
 class RegisterUserScreen extends StatefulWidget {
   @override
@@ -12,12 +13,15 @@ class RegisterUserScreen extends StatefulWidget {
 }
 
 class _RegisterUserScreenState extends State<RegisterUserScreen> {
+  late List<CameraDescription> _cameras;
   late CameraController _cameraController;
   late Future<void> _initializeCameraController;
   final TextEditingController _nameController = TextEditingController();
   bool _isPhotoCaptured = false;
   bool _isNameEntered = false;
   String? _capturedImagePath;
+  int _selectedCameraIndex = 0;
+  bool _isFlashOn = false;
 
   @override
   void initState() {
@@ -25,11 +29,40 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
     _initializeCamera();
   }
 
-  void _initializeCamera() async {
-    final cameras = await availableCameras();
-    _cameraController = CameraController(cameras[1], ResolutionPreset.medium);
+  void _initializeCamera({int? cameraIndex}) async {
+    _cameras = await availableCameras();
+
+    // Default to front camera
+    _selectedCameraIndex = cameraIndex ??
+        _cameras.indexWhere((camera) => camera.lensDirection == CameraLensDirection.front);
+
+    if (_selectedCameraIndex == -1) {
+      _selectedCameraIndex = 0; // Fallback to first camera if front is unavailable
+    }
+
+    _cameraController = CameraController(
+      _cameras[_selectedCameraIndex],
+      ResolutionPreset.medium,
+      enableAudio: false,
+    );
+
     _initializeCameraController = _cameraController.initialize();
     if (mounted) setState(() {});
+  }
+
+  void _switchCamera() {
+    _selectedCameraIndex = (_selectedCameraIndex + 1) % _cameras.length;
+    _initializeCamera(cameraIndex: _selectedCameraIndex);
+  }
+
+  void _toggleFlash() async {
+    if (_cameraController.value.flashMode == FlashMode.off) {
+      await _cameraController.setFlashMode(FlashMode.torch);
+      setState(() => _isFlashOn = true);
+    } else {
+      await _cameraController.setFlashMode(FlashMode.off);
+      setState(() => _isFlashOn = false);
+    }
   }
 
   @override
@@ -44,16 +77,16 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
       final XFile file = await _cameraController.takePicture();
       File imageFile = File(file.path);
 
-      // Read image bytes
       Uint8List imageBytes = await imageFile.readAsBytes();
       img.Image? image = img.decodeImage(imageBytes);
 
       if (image != null) {
-        // Flip image horizontally
-        img.Image flippedImage = img.flipHorizontal(image);
+        // Flip image horizontally if using front camera
+        img.Image processedImage = _cameras[_selectedCameraIndex].lensDirection == CameraLensDirection.front
+            ? img.flipHorizontal(image)
+            : image;
 
-        // Save the flipped image
-        await imageFile.writeAsBytes(img.encodeJpg(flippedImage));
+        await imageFile.writeAsBytes(img.encodeJpg(processedImage));
 
         setState(() {
           _capturedImagePath = imageFile.path;
@@ -63,7 +96,6 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
     }
   }
 
-
   Future<void> _submitData() async {
     if (_capturedImagePath != null && _nameController.text.isNotEmpty) {
       var request = http.MultipartRequest(
@@ -72,21 +104,13 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
       );
 
       request.fields['name'] = _nameController.text;
-
-      // Add the actual image file, not just the path
       request.files.add(await http.MultipartFile.fromPath(
         'file',
         _capturedImagePath!,
-        contentType: MediaType('image', 'jpeg'), // Ensure it's properly recognized
+        contentType: MediaType('image', 'jpeg'),
       ));
 
-      // Debugging: Print request details
-      print('Request Fields: ${request.fields}');
-      print('Sending Image File: $_capturedImagePath');
-
       var response = await request.send();
-
-      // Convert response to String
       var responseBody = await response.stream.bytesToString();
       print('Response: $responseBody');
 
@@ -97,7 +121,6 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
       }
     }
   }
-
 
   void _onNameSubmitted() {
     setState(() {
@@ -156,9 +179,9 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
                         ),
                         child: _capturedImagePath != null
                             ? Image.file(
-                                File(_capturedImagePath!),
-                                fit: BoxFit.cover,
-                              )
+                          File(_capturedImagePath!),
+                          fit: BoxFit.cover,
+                        )
                             : Center(child: CircularProgressIndicator()),
                       ),
                       SizedBox(height: 20),
@@ -181,18 +204,43 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
                         child: Text("Submit", style: TextStyle(fontSize: 16)),
                       ),
                     ] else ...[
-                      FutureBuilder<void>(
-                        future: _initializeCameraController,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.done) {
-                            return ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: CameraPreview(_cameraController),
-                            );
-                          } else {
-                            return Center(child: CircularProgressIndicator());
-                          }
-                        },
+                      Stack(
+                        children: [
+                          FutureBuilder<void>(
+                            future: _initializeCameraController,
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState == ConnectionState.done) {
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: CameraPreview(_cameraController),
+                                );
+                              } else {
+                                return Center(child: CircularProgressIndicator());
+                              }
+                            },
+                          ),
+                          Positioned(
+                            top: 10,
+                            right: 10,
+                            child: IconButton(
+                              icon: Icon(Icons.switch_camera, color: Colors.white, size: 30),
+                              onPressed: _switchCamera,
+                            ),
+                          ),
+                          if (_cameras[_selectedCameraIndex].lensDirection == CameraLensDirection.back)
+                            Positioned(
+                              top: 10,
+                              left: 10,
+                              child: IconButton(
+                                icon: Icon(
+                                  _isFlashOn ? Icons.flash_on : Icons.flash_off,
+                                  color: Colors.white,
+                                  size: 30,
+                                ),
+                                onPressed: _toggleFlash,
+                              ),
+                            ),
+                        ],
                       ),
                       SizedBox(height: 20),
                       ElevatedButton.icon(

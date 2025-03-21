@@ -6,22 +6,31 @@ import 'dart:io';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
 import 'package:http_parser/http_parser.dart';
+import 'package:medhir/employee-dashborad.dart';
 import 'package:mime/mime.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 import 'attendance_popup.dart';
+import 'home_page.dart';
+import 'dropdown.dart';
 
 class CheckInScreen extends StatefulWidget {
   final String? prefilledUser;
+  final VoidCallback? onCheckInSuccess; // Callback function
 
-  const CheckInScreen({Key? key, this.prefilledUser}) : super(key: key);
+  const CheckInScreen({Key? key, this.prefilledUser, this.onCheckInSuccess}) : super(key: key);
 
   @override
   _CheckInScreenState createState() => _CheckInScreenState();
 }
 
+
 class _CheckInScreenState extends State<CheckInScreen> {
   late CameraController _cameraController;
   late Future<void> _initializeCameraController;
+  List<CameraDescription> cameras = [];
+  int selectedCameraIndex = 0;
+  bool isFlashOn = false;
   List<String> users = [];
   String? selectedUser;
   String? _capturedImagePath;
@@ -36,11 +45,41 @@ class _CheckInScreenState extends State<CheckInScreen> {
     }
   }
 
-  void _initializeCamera() async {
-    final cameras = await availableCameras();
-    _cameraController = CameraController(cameras[1], ResolutionPreset.medium);
+  void _initializeCamera({int? cameraIndex}) async {
+    cameras = await availableCameras();
+
+    // Select front camera by default if no index is provided
+    selectedCameraIndex = cameraIndex ??
+        cameras.indexWhere((camera) => camera.lensDirection == CameraLensDirection.front);
+
+    // If no front camera is found, fallback to the first available camera
+    if (selectedCameraIndex == -1) {
+      selectedCameraIndex = 0;
+    }
+
+    _cameraController = CameraController(cameras[selectedCameraIndex], ResolutionPreset.medium);
+
     _initializeCameraController = _cameraController.initialize();
     if (mounted) setState(() {});
+  }
+
+  void _switchCamera() {
+    int newIndex = (selectedCameraIndex + 1) % cameras.length;
+    _initializeCamera(cameraIndex: newIndex);
+  }
+
+  void _toggleFlash() async {
+    if (_cameraController.value.flashMode == FlashMode.off) {
+      await _cameraController.setFlashMode(FlashMode.torch);
+      setState(() {
+        isFlashOn = true;
+      });
+    } else {
+      await _cameraController.setFlashMode(FlashMode.off);
+      setState(() {
+        isFlashOn = false;
+      });
+    }
   }
 
   Future<void> _fetchUsers() async {
@@ -48,9 +87,14 @@ class _CheckInScreenState extends State<CheckInScreen> {
       final response = await http.get(Uri.parse('http://192.168.0.200:8082/api/users'));
       if (response.statusCode == 200) {
         List<dynamic> data = json.decode(response.body);
-        setState(() {
-          users = data.map((user) => user['name'].toString()).toList();
-        });
+        List<String> sortedUsers = data.map((user) => user['name'].toString()).toList();
+        sortedUsers.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+        if (mounted) {
+          setState(() {
+            users = sortedUsers;
+          });
+        }
       } else {
         throw Exception('Failed to load users');
       }
@@ -75,14 +119,15 @@ class _CheckInScreenState extends State<CheckInScreen> {
       img.Image? image = img.decodeImage(Uint8List.fromList(imageBytes));
 
       if (image != null) {
-        // Flip image horizontally
-        img.Image flippedImage = img.flipHorizontal(image);
+        // Flip image horizontally if using front camera
+        img.Image processedImage = cameras[selectedCameraIndex].lensDirection == CameraLensDirection.front
+            ? img.flipHorizontal(image)
+            : image;
 
-        // Save the flipped image
-        File flippedFile = File(file.path)..writeAsBytesSync(img.encodeJpg(flippedImage));
+        await imageFile.writeAsBytes(img.encodeJpg(processedImage));
 
         setState(() {
-          _capturedImagePath = flippedFile.path;
+          _capturedImagePath = imageFile.path;
         });
       }
     }
@@ -113,31 +158,36 @@ class _CheckInScreenState extends State<CheckInScreen> {
         var responseBody = await response.stream.bytesToString();
         print('Response: $responseBody');
 
+
+
         if (response.statusCode == 200) {
           if (responseBody.contains('Present')) {
             showAttendancePopup(context, true, () async {}, () {}, selectedUser!); // Show success popup
+
+            widget.onCheckInSuccess?.call(); // Call fetchCheckInsToday
+
+            Future.delayed(Duration(seconds: 1), () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => EmployeeDashboard()),
+              );
+            });
           } else if (responseBody.contains('Absent')) {
             showAttendancePopup(
               context,
               false,
-              () async {
+                  () async {
                 Navigator.pop(context); // Close popup first
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => CheckInScreen(
-                      prefilledUser: selectedUser, // Pass prefilled user
-                    ),
-                  ),
+                  MaterialPageRoute(builder: (context) => EmployeeDashboard()),
                 );
               },
-              () {
+                  () {
                 showAttendancePopup(context, false, () async {}, () {}, selectedUser!); // Manual mark
               },
               selectedUser!, // Pass prefilled user
             );
-          } else {
-            _showErrorSnackbar(context, "Unexpected response: $responseBody");
           }
         } else {
           _showErrorSnackbar(context, "Server Error: $responseBody");
@@ -149,6 +199,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
       _showErrorSnackbar(context, "Please select a user and capture an image.");
     }
   }
+
 
   // Helper function to show error messages
   void _showErrorSnackbar(BuildContext context, String message) {
@@ -200,27 +251,27 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Select User", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: selectedUser,
-                      onChanged: (String? newValue) {
-                        setState(() => selectedUser = newValue);
+                    UserDropdown(
+                      users: users,
+                      selectedUser: selectedUser,
+                      onUserSelected: (user) {
+                        setState(() {
+                          selectedUser = user;
+                        });
                       },
-                      items: users.map((String user) {
-                        return DropdownMenuItem<String>(
-                          value: user,
-                          child: Text(user),
-                        );
-                      }).toList(),
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
                     ),
-                    SizedBox(height: 8),
                     if (selectedUser != null)
-                      Text("Selected User: $selectedUser", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.teal.shade800)),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          "Selected User: $selectedUser",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.teal.shade800,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -235,7 +286,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text("Position Your Face in the Frame", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(
+                      "Position Your Face in the Frame",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
                     SizedBox(height: 6),
                     Stack(
                       children: [
@@ -272,6 +326,20 @@ class _CheckInScreenState extends State<CheckInScreen> {
                       ],
                     ),
                     SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.switch_camera, color: Colors.teal),
+                          onPressed: _switchCamera,
+                        ),
+                        IconButton(
+                          icon: Icon(isFlashOn ? Icons.flash_on : Icons.flash_off, color: Colors.teal),
+                          onPressed: _toggleFlash,
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
                     Center(
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -291,6 +359,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
           ),
         ),
       ),
+
     );
   }
 }

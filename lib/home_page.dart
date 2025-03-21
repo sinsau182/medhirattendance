@@ -22,9 +22,17 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    fetchTotalUsers(); // Fetch total users on screen load
-    fetchCheckInsToday();
+    fetchTotalUsers(); // Fetch total users only once
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      fetchCheckInsToday(); // Ensure it runs after UI build
+    });
+  }
+
 
   Future<void> fetchTotalUsers() async {
     final url = Uri.parse('http://192.168.0.200:8082/api/users');
@@ -54,15 +62,18 @@ class _HomePageState extends State<HomePage> {
       if (response.statusCode == 200) {
         List<dynamic> attendanceList = json.decode(response.body);
 
-        DateTime nowUtc = DateTime.now().toUtc();
-        String formattedDate = nowUtc.toIso8601String().split('T')[0]; // "YYYY-MM-DD"
+        // Get today's date in local time (without time)
+        DateTime today = DateTime.now();
+        String formattedToday = "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
 
         int checkIns = attendanceList.where((entry) {
-          if (entry.containsKey('timestamp') && entry['timestamp'] is String) {
+          if (entry.containsKey('timestampIST') && entry['timestampIST'] is String) {
             try {
-              DateTime entryTime = DateTime.parse(entry['timestamp']).toUtc();
-              String entryDate = entryTime.toIso8601String().split('T')[0];
-              return entryDate == formattedDate;
+              // Convert timestamp to DateTime (local time)
+              DateTime entryTime = DateTime.parse(entry['timestampIST']).toLocal();
+              String entryDate = "${entryTime.year}-${entryTime.month.toString().padLeft(2, '0')}-${entryTime.day.toString().padLeft(2, '0')}";
+
+              return entryDate == formattedToday; // Compare only dates
             } catch (e) {
               print('Error parsing timestamp: $e');
               return false;
@@ -81,6 +92,7 @@ class _HomePageState extends State<HomePage> {
       print('Error fetching attendance: $e');
     }
   }
+
 
 
   Future<void> _logout() async {
@@ -190,8 +202,13 @@ class _HomePageState extends State<HomePage> {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => CheckInScreen()),
+                        MaterialPageRoute(
+                          builder: (context) => CheckInScreen(
+                            onCheckInSuccess: fetchCheckInsToday, // Pass function
+                          ),
+                        ),
                       );
+
                     },
                   ),
                 ),

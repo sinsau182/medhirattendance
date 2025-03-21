@@ -28,10 +28,10 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
-  flutter_facebook_auth: ^5.0.5
+  flutter_facebook_auth: 7.1.1
   google_sign_in: ^6.0.0
   flutter_screenutil: ^5.8.3
-  http: 0.13.6
+  http: ^1.1.2
   shared_preferences: ^2.0.7
   flutter_native_splash: ^2.2.13
   animated_text_kit: ^4.2.1  # or the latest version
@@ -42,7 +42,14 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   image_picker: ^1.1.2
-  dropdown_search: ^6.0.2
+  dropdown_search: ^5.0.6
+  lucide_icons_flutter: ^2.0.0
+  lucide_icons: ^0.257.0
+  font_awesome_flutter: ^10.8.0
+  shadcn_flutter: ^0.0.30
+  file_picker: ^9.2.0
+  iconsax: ^0.0.8
+  google_fonts: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -54,7 +61,8 @@ dev_dependencies:
   jwt_decoder: ^2.0.1
   intl: ^0.18.1
   flutter_screenutil: ^5.9.0
-  dropdown_search: ^6.0.2
+  dropdown_search: ^5.0.6
+  lucide_icons_flutter: ^2.0.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -74,6 +82,7 @@ flutter:
     - assets/google_icon.png
     - assets/facebook_icon.png
     - assets/instagram_logo.png
+    - assets/avatar.png
 
     # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
@@ -112,6 +121,52 @@ flutter:
         - asset: fonts/Merriweather-Regular.ttf
         - asset: fonts/Merriweather-Bold.ttf
           weight: 700
+    - family: GeistSans
+      fonts:
+        - asset: packages/shadcn_flutter/fonts/Geist-Black.otf
+          weight: 800
+        - asset: packages/shadcn_flutter/fonts/Geist-Bold.otf
+          weight: 700
+        - asset: packages/shadcn_flutter/fonts/Geist-Light.otf
+          weight: 300
+        - asset: packages/shadcn_flutter/fonts/Geist-Medium.otf
+          weight: 500
+        - asset: packages/shadcn_flutter/fonts/Geist-SemiBold.otf
+          weight: 600
+        - asset: packages/shadcn_flutter/fonts/Geist-Thin.otf
+          weight: 100
+        - asset: packages/shadcn_flutter/fonts/Geist-UltraBlack.otf
+          weight: 900
+        - asset: packages/shadcn_flutter/fonts/Geist-UltraLight.otf
+          weight: 200
+        - asset: packages/shadcn_flutter/fonts/Geist-Regular.otf
+          weight: 400
+    - family: GeistMono
+      fonts:
+        - asset: packages/shadcn_flutter/fonts/GeistMono-Black.otf
+          weight: 800
+        - asset: packages/shadcn_flutter/fonts/GeistMono-Bold.otf
+          weight: 700
+        - asset: packages/shadcn_flutter/fonts/GeistMono-Light.otf
+          weight: 300
+        - asset: packages/shadcn_flutter/fonts/GeistMono-Medium.otf
+          weight: 500
+        - asset: packages/shadcn_flutter/fonts/GeistMono-Regular.otf
+          weight: 400
+        - asset: packages/shadcn_flutter/fonts/GeistMono-SemiBold.otf
+          weight: 600
+        - asset: packages/shadcn_flutter/fonts/GeistMono-Thin.otf
+          weight: 100
+        - asset: packages/shadcn_flutter/fonts/GeistMono-UltraBlack.otf
+          weight: 900
+        - asset: packages/shadcn_flutter/fonts/GeistMono-UltraLight.otf
+          weight: 200
+    - family: RadixIcons
+      fonts:
+        - asset: packages/shadcn_flutter/icons/RadixIcons.otf
+    - family: BootstrapIcons
+      fonts:
+        - asset: packages/shadcn_flutter/icons/BootstrapIcons.otf
 
 
   # For details regarding fonts from package dependencies,

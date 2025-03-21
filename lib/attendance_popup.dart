@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'employee-dashborad.dart';
 import 'home_page.dart';
 import 'check-in.dart';
 
@@ -61,12 +62,8 @@ void showAttendancePopup(
                       Navigator.pop(context); // Close popup first
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(
-                          builder: (context) => CheckInScreen(
-                            prefilledUser: selectedUser, // Pass prefilled user
-                          ),
-                        ),
-                      ); // Navigate to CheckInScreen
+                        MaterialPageRoute(builder: (context) => EmployeeDashboard()),
+                      );// Navigate to CheckInScreen
                     },
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
                     child: const Text("Retry", style: TextStyle(color: Colors.white)),
@@ -77,7 +74,7 @@ void showAttendancePopup(
                       Navigator.pop(context); // Close popup first
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (context) => const HomePage()),
+                        MaterialPageRoute(builder: (context) => EmployeeDashboard()),
                       ); // Navigate to HomePage
                     },
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),

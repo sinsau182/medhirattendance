@@ -28,7 +28,7 @@ class _ViewAttendanceScreenState extends State<ViewAttendanceScreen> {
         Map<String, List<Map<String, String>>> tempGroupedData = {};
 
         for (var entry in attendanceList) {
-          String fullTimestamp = entry['timestamp'];
+          String fullTimestamp = entry['timestampIST'];
           DateTime dateTime = DateTime.parse(fullTimestamp);
 
           String date =
