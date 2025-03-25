@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'employee-dashborad.dart';
-import 'home_page.dart';
-import 'check-in.dart';
 
 void showAttendancePopup(
   BuildContext context,

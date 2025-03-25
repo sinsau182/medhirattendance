@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ApplyLeaveScreen extends StatefulWidget {
-  const ApplyLeaveScreen({Key? key}) : super(key: key);
+  const ApplyLeaveScreen({super.key});
 
   @override
   _ApplyLeaveScreenState createState() => _ApplyLeaveScreenState();
@@ -109,7 +109,7 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
                       .toList(),
                   onChanged: (value) {
                     setState(() {
-                      _leaveType = value as String?;
+                      _leaveType = value;
                     });
                   },
                   validator: (value) => value == null ? 'Please select a leave type' : null,

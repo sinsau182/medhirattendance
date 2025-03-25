@@ -6,11 +6,11 @@ class UserDropdown extends StatefulWidget {
   final ValueChanged<String?> onUserSelected;
 
   const UserDropdown({
-    Key? key,
+    super.key,
     required this.users,
     this.selectedUser,
     required this.onUserSelected,
-  }) : super(key: key);
+  });
 
   @override
   _UserDropdownState createState() => _UserDropdownState();
@@ -18,7 +18,7 @@ class UserDropdown extends StatefulWidget {
 
 class _UserDropdownState extends State<UserDropdown> {
   String? _selectedUser;
-  TextEditingController _controller = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
   List<String> _filteredUsers = [];
   bool _isDropdownVisible = false;
 

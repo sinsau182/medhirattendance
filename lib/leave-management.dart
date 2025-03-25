@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'ApplyLeave.dart';
 
 class LeaveManagementScreen extends StatefulWidget {
-  const LeaveManagementScreen({Key? key}) : super(key: key);
+  const LeaveManagementScreen({super.key});
 
   @override
   _LeaveManagementScreenState createState() => _LeaveManagementScreenState();
@@ -90,47 +90,57 @@ class _LeaveManagementScreenState extends State<LeaveManagementScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            if (_showApplyLeaveForm)
-              ApplyLeaveScreen()
-            else ...[
-              _buildLeaveBalanceCard(context),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _showApplyLeaveForm = true;
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: const Text('Apply for Leave', style: TextStyle(color: Colors.white)),
+            Expanded(
+              child: SingleChildScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_showApplyLeaveForm)
+                      ApplyLeaveScreen()
+                    else ...[
+                      _buildLeaveBalanceCard(context),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _showApplyLeaveForm = true;
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text('Apply for Leave', style: TextStyle(color: Colors.white)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Leave History',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 12),
+                      ListView(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true, // Prevents unbounded height error
+                        physics: NeverScrollableScrollPhysics(), // Avoids nested scrolling issues
+                        children: _leaveHistory.map((leave) {
+                          return _buildLeaveHistoryCard(
+                            leave['leaveType'],
+                            '${leave['startDate']} - ${leave['endDate']}',
+                            leave['reason'],
+                            leave['status'] == "Approved",
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              const Text(
-                'Leave History',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.zero,
-                  children: _leaveHistory.map((leave) {
-                    return _buildLeaveHistoryCard(
-                      leave['leaveType'],
-                      '${leave['startDate']} - ${leave['endDate']}',
-                      leave['reason'],
-                      leave['status'] == "Approved",
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
+            ),
           ],
         ),
       ),

@@ -7,12 +7,12 @@ class DashboardCard extends StatefulWidget {
   final String? className; // This can be used for custom styling if needed
 
   const DashboardCard({
-    Key? key,
+    super.key,
     required this.child,
     this.onTap,
     this.delay = 0.0,
     this.className,
-  }) : super(key: key);
+  });
 
   @override
   _DashboardCardState createState() => _DashboardCardState();

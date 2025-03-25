@@ -7,6 +7,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'ExpenseForm.dart';
 import 'AdvanceForm.dart';
 import 'PayslipCard.dart';
+import 'package:intl/intl.dart';
+
 
 class SalaryPayrollPage extends StatefulWidget {
   const SalaryPayrollPage({super.key});
@@ -17,7 +19,7 @@ class SalaryPayrollPage extends StatefulWidget {
 
 class _SalaryPayrollPageState extends State<SalaryPayrollPage> {
   int _selectedIndex = 0;
-  bool _showPaySlip = true;
+  final bool _showPaySlip = true;
 
   @override
   Widget build(BuildContext context) {
@@ -314,6 +316,8 @@ class SalaryCard extends StatelessWidget {
 
 
 class PayslipWidget extends StatefulWidget {
+  const PayslipWidget({super.key});
+
   @override
   _PayslipWidgetState createState() => _PayslipWidgetState();
 }
@@ -329,12 +333,14 @@ class _PayslipWidgetState extends State<PayslipWidget> {
 
   Future<void> _fetchPayslips() async {
     try {
-      final response = await http.get(Uri.parse('http://192.168.0.200:8084/payroll/payslips/emp123'));
+      final response = await http.get(Uri.parse('http://192.168.0.200:8084/payroll/payslips/employee/emp123'));
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
+        print(response.body);
         setState(() {
           payslips = data.map((payslip) {
             return {
+              "payslipId": payslip['payslipId'],
               "month": "${payslip['month']} ${payslip['year']}",
               "date": payslip['creditedDate'],
               "amount": "₹${payslip['netSalary']}",
@@ -405,10 +411,11 @@ class _PayslipWidgetState extends State<PayslipWidget> {
                       ],
                     ),
                     onTap: () {
+                      print('Payslip ID: ${payslip["payslipId"]}');
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => PayslipScreen(month: payslip["month"]!),
+                          builder: (context) => PayslipScreen(payslipId: payslip["payslipId"]!)
                         ),
                       );
                     },
@@ -427,6 +434,8 @@ class _PayslipWidgetState extends State<PayslipWidget> {
 
 
 class ExpenseHistoryWidget extends StatefulWidget {
+  const ExpenseHistoryWidget({super.key});
+
   @override
   _ExpenseHistoryWidgetState createState() => _ExpenseHistoryWidgetState();
 }
@@ -449,7 +458,7 @@ class _ExpenseHistoryWidgetState extends State<ExpenseHistoryWidget> {
           expenses = data.map((expense) {
             return {
               "category": expense['category'],
-              "date": expense['date'],
+              "date": _formatTimestamp(expense['timestamp']),
               "amount": "₹${expense['amount']}",
               "status": expense['status'],
             };
@@ -462,7 +471,17 @@ class _ExpenseHistoryWidgetState extends State<ExpenseHistoryWidget> {
       print('Error fetching expenses: $e');
     }
   }
-Widget build(BuildContext context) {
+
+  String _formatTimestamp(String timestamp) {
+    try {
+      DateTime date = DateTime.parse(timestamp);
+      return DateFormat('dd MMM yyyy').format(date); // Output: "15 Jun 2023"
+    } catch (e) {
+      return timestamp; // Fallback in case of error
+    }
+  }
+@override
+  Widget build(BuildContext context) {
   return Padding(
     padding: const EdgeInsets.all(2.0),
     child: Column(
@@ -547,6 +566,8 @@ Widget build(BuildContext context) {
 
 
 class RecentAdvanceRequests extends StatefulWidget {
+  const RecentAdvanceRequests({super.key});
+
     @override
     _RecentAdvanceRequestsState createState() => _RecentAdvanceRequestsState();
   }
@@ -568,7 +589,7 @@ class RecentAdvanceRequests extends StatefulWidget {
           setState(() {
             requests = data.map((request) {
               return {
-                "date": request['requestedDate'],
+                "date": _formatTimestamp(request['timestamp']),
                 "amount": "₹${request['requestedAmount']}",
                 "purpose": request['reason'],
                 "status": request['status'],
@@ -580,6 +601,15 @@ class RecentAdvanceRequests extends StatefulWidget {
         }
       } catch (e) {
         print('Error fetching advance requests: $e');
+      }
+    }
+
+    String _formatTimestamp(String timestamp) {
+      try {
+        DateTime date = DateTime.parse(timestamp);
+        return DateFormat('dd MMM yyyy').format(date); // Output: "15 Jun 2023"
+      } catch (e) {
+        return timestamp; // Fallback in case of error
       }
     }
 
@@ -639,7 +669,7 @@ class RecentAdvanceRequests extends StatefulWidget {
                           ],
                         ),
                         Container(
-                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: request["status"] == "Approved" ? Colors.green[100] : Colors.orange[100],
                             borderRadius: BorderRadius.circular(20),

@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:intl/intl.dart';
 
 class ViewAttendanceScreen extends StatefulWidget {
+  const ViewAttendanceScreen({super.key});
+
   @override
   _ViewAttendanceScreenState createState() => _ViewAttendanceScreenState();
 }
@@ -161,7 +163,7 @@ class _ViewAttendanceScreenState extends State<ViewAttendanceScreen> {
                     ),
                   ),
                 );
-              }).toList(),
+              }),
             ],
           );
         }).toList(),

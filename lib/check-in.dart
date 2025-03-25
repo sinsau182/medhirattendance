@@ -6,19 +6,15 @@ import 'dart:io';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
 import 'package:http_parser/http_parser.dart';
-import 'package:medhir/employee-dashborad.dart';
 import 'package:mime/mime.dart';
-import 'package:fluttertoast/fluttertoast.dart';
-import 'package:dropdown_search/dropdown_search.dart';
 import 'attendance_popup.dart';
-import 'home_page.dart';
 import 'dropdown.dart';
 
 class CheckInScreen extends StatefulWidget {
   final String? prefilledUser;
   final VoidCallback? onCheckInSuccess; // Callback function
 
-  const CheckInScreen({Key? key, this.prefilledUser, this.onCheckInSuccess}) : super(key: key);
+  const CheckInScreen({super.key, this.prefilledUser, this.onCheckInSuccess});
 
   @override
   _CheckInScreenState createState() => _CheckInScreenState();

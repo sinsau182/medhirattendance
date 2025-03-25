@@ -4,10 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 class SalaryAdvanceForm extends StatefulWidget {
-  const SalaryAdvanceForm({Key? key}) : super(key: key);
+  const SalaryAdvanceForm({super.key});
 
   @override
   _SalaryAdvanceFormState createState() => _SalaryAdvanceFormState();

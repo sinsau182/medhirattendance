@@ -5,9 +5,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class PayslipScreen extends StatefulWidget {
-  final String month;
+  final String payslipId;
 
-  const PayslipScreen({required this.month, Key? key}) : super(key: key);
+  const PayslipScreen({required this.payslipId, super.key});
 
   @override
   _PayslipScreenState createState() => _PayslipScreenState();
@@ -24,7 +24,7 @@ class _PayslipScreenState extends State<PayslipScreen> {
 
   Future<void> _fetchPayslipData() async {
     try {
-      final response = await http.get(Uri.parse('http://192.168.0.200:8084/payroll/payslips/emp123'));
+      final response = await http.get(Uri.parse('http://192.168.0.200:8084/payroll/payslips/id/${widget.payslipId}'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
@@ -56,7 +56,10 @@ class _PayslipScreenState extends State<PayslipScreen> {
               children: [
                 IconButton(
                   icon: Icon(Icons.arrow_back, color: Colors.teal.shade800),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.pop(context);
+                  },
                 ),
                 Text(
                   'Salary & Payroll',
@@ -93,7 +96,7 @@ class _PayslipScreenState extends State<PayslipScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("Payslip: ${widget.month}", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500)),
+                        Text("Payslip: ${payslipData!['month']}", style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500)),
                         ElevatedButton.icon(
                           onPressed: () {},
                           icon: Icon(LucideIcons.download, size: 16),
@@ -148,15 +151,16 @@ class _PayslipScreenState extends State<PayslipScreen> {
                     Text("Earnings", style: GoogleFonts.inter(color: Color(0xFF858D8C), fontSize: 15, fontWeight: FontWeight.bold)),
                     _salaryRow("Basic Salary", "₹${payslipData!['basicSalary']}"),
                     _salaryRow("HRA", "₹${payslipData!['hra']}"),
-                    _salaryRow("Conveyance Allowance", "₹${payslipData!['conveyanceAllowance']}"),
+                    _salaryRow("Reimbursement", "₹${payslipData!['reimbursement']}"),
                     _salaryRow("Medical Allowance", "₹${payslipData!['medicalAllowance']}"),
-                    _salaryRow("Special Allowance", "₹${payslipData!['specialAllowance']}"),
+                    _salaryRow("Advance Taken", "₹${payslipData!['advanceTaken']}"),
                     Divider(),
                     _salaryRow("Gross Salary", "₹${payslipData!['grossSalary']}", isBold: true),
                     SizedBox(height: 10),
                     Text("Deductions", style: GoogleFonts.inter(color: Color(0xFF858D8C), fontSize: 15, fontWeight: FontWeight.bold)),
                     _salaryRow("Provident Fund", "₹${payslipData!['providentFund']}"),
                     _salaryRow("Income Tax", "₹${payslipData!['incomeTax']}"),
+                    _salaryRow("Professional Tax", "₹${payslipData!['professionalTax']}"),
                     Divider(),
                     _salaryRow("Total Deductions", "₹${payslipData!['totalDeductions']}", isBold: true),
                     Divider(),

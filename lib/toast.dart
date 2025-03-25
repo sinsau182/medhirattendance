@@ -57,13 +57,8 @@ class ToastHelper {
 
     // Get overlay state safely
     OverlayState? overlayState = Overlay.of(context, rootOverlay: true);
-    if (overlayState != null) {
-      overlayState.insert(overlayEntry!);
-    } else {
-      debugPrint('Error: Overlay not found');
-      return;
-    }
-
+    overlayState.insert(overlayEntry!);
+  
     // Auto dismiss after 3 seconds
     Future.delayed(const Duration(seconds: 3), () {
       try {

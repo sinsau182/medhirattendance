@@ -5,9 +5,10 @@ import 'dart:io';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
 import 'package:http_parser/http_parser.dart';
-import 'package:mime/mime.dart';
 
 class RegisterUserScreen extends StatefulWidget {
+  const RegisterUserScreen({super.key});
+
   @override
   _RegisterUserScreenState createState() => _RegisterUserScreenState();
 }

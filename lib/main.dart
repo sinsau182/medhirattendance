@@ -1,11 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:medhir/home_page.dart';
-import 'leave-management.dart';
-import 'payroll.dart';
-import 'ExpenseForm.dart';
 import 'employee-dashborad.dart';
-import 'payslipCard.dart';
-import 'myprofile.dart';
 
 void main() {
   runApp(const MyApp());
@@ -20,7 +14,7 @@ class MyApp extends StatelessWidget {
       builder: (context, child) {
         return MediaQuery(
             data: MediaQuery.of(context).copyWith(
-              textScaleFactor: 1.0, // Prevent font scaling
+              textScaler: TextScaler.linear(1.0), // Prevent font scaling
             ),
             child: child!);
       },
