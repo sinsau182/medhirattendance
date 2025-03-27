@@ -36,9 +36,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
     super.initState();
     _initializeCamera();
     _fetchUsers();
-    if (widget.prefilledUser != null) {
-      selectedUser = widget.prefilledUser;
-    }
+    selectedUser = 'emp001';
   }
 
   void _initializeCamera({int? cameraIndex}) async {
@@ -134,10 +132,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
       try {
         var request = http.MultipartRequest(
           'POST',
-          Uri.parse('http://192.168.0.200:8082/api/users/verify'),
+          Uri.parse('http://192.168.0.200:8082/attendance/checkin'),
         );
 
-        request.fields['name'] = selectedUser!;
+        request.fields['employeeId'] = selectedUser!;
 
         // Determine MIME type
         String? mimeType = lookupMimeType(_capturedImagePath!) ?? 'image/jpeg';
@@ -153,7 +151,6 @@ class _CheckInScreenState extends State<CheckInScreen> {
         var response = await request.send();
         var responseBody = await response.stream.bytesToString();
         print('Response: $responseBody');
-
 
 
         if (response.statusCode == 200) {

@@ -9,6 +9,13 @@ class AttendanceScreen extends StatefulWidget {
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
   DateTime _currentDate = DateTime.now();
+  String _monthName(int month) {
+    const List<String> monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return monthNames[month - 1];
+  }
 
   void _previousWeek() {
     setState(() {
@@ -43,7 +50,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDateRange(),
+            _buildMonthlyCalendar(),
             const SizedBox(height: 20),
             const Text(
               'Work Hours Timeline',
@@ -57,9 +64,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
-  Widget _buildDateRange() {
-    DateTime startOfWeek = _currentDate.subtract(Duration(days: _currentDate.weekday - 1));
-    DateTime endOfWeek = startOfWeek.add(Duration(days: 6));
+  Widget _buildMonthlyCalendar() {
+    DateTime firstDayOfMonth = DateTime(_currentDate.year, _currentDate.month, 1);
+    DateTime lastDayOfMonth = DateTime(_currentDate.year, _currentDate.month + 1, 0);
+    int startingWeekday = firstDayOfMonth.weekday;
+
+    List<DateTime?> calendarDays = List.generate(42, (index) {
+      int dayOffset = index - (startingWeekday - 1);
+      DateTime? day;
+      if (dayOffset >= 0 && dayOffset < lastDayOfMonth.day) {
+        day = DateTime(_currentDate.year, _currentDate.month, dayOffset + 1);
+      }
+      return day;
+    });
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -75,45 +92,60 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.arrow_back_ios, size: 18, color: Colors.black),
-                onPressed: _previousWeek,
+                onPressed: _previousMonth,
               ),
               Text(
-                '${startOfWeek.day} ${_monthName(startOfWeek.month)} - ${endOfWeek.day} ${_monthName(endOfWeek.month)} ${endOfWeek.year}',
+                '${_monthName(firstDayOfMonth.month)} ${firstDayOfMonth.year}',
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               IconButton(
                 icon: const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.black),
-                onPressed: _nextWeek,
+                onPressed: _nextMonth,
               ),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(7, (index) {
-              DateTime day = startOfWeek.add(Duration(days: index));
-              bool isSelected = day.day == DateTime.now().day && day.month == DateTime.now().month && day.year == DateTime.now().year;
-              return Column(
+            children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                .map((day) => Text(day, style: const TextStyle(fontWeight: FontWeight.bold)))
+                .toList(),
+          ),
+          const SizedBox(height: 8),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+            ),
+            itemCount: 42,
+            itemBuilder: (context, index) {
+              DateTime? day = calendarDays[index];
+              bool isSelected = day != null &&
+                  day.day == DateTime.now().day &&
+                  day.month == DateTime.now().month &&
+                  day.year == DateTime.now().year;
+
+              return day == null
+                  ? const SizedBox.shrink()
+                  : Column(
                 children: [
-                  Text(
-                    _dayName(day.weekday),
-                    style: TextStyle(color: isSelected ? Colors.green : Colors.grey),
-                  ),
-                  const SizedBox(height: 4),
                   CircleAvatar(
-                    radius: 12,
+                    radius: 14,
                     backgroundColor: isSelected ? Colors.green : Colors.grey.shade200,
                     child: Text(
                       '${day.day}',
                       style: TextStyle(
-                        fontSize: 12,
-                        color: isSelected ? Colors.white : Colors.grey,
+                        fontSize: 14,
+                        color: isSelected ? Colors.white : Colors.black,
                       ),
                     ),
-                  )
+                  ),
                 ],
               );
-            }),
+            },
           ),
           const SizedBox(height: 12),
           Row(
@@ -129,18 +161,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
-  String _dayName(int weekday) {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return days[weekday - 1];
+  void _previousMonth() {
+    setState(() {
+      _currentDate = DateTime(_currentDate.year, _currentDate.month - 1, 1);
+    });
   }
 
-  String _monthName(int month) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return months[month - 1];
+  void _nextMonth() {
+    setState(() {
+      _currentDate = DateTime(_currentDate.year, _currentDate.month + 1, 1);
+    });
   }
+
 
   Widget _buildSummaryTile(String title, String value) {
     return Column(
