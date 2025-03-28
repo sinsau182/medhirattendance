@@ -11,6 +11,9 @@ import 'package:medhir/check-in.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
+import 'package:camera/camera.dart';
+import 'package:mime/mime.dart';
+import 'package:http_parser/http_parser.dart';
 
 void main() {
   runApp(MaterialApp(
@@ -29,212 +32,489 @@ class EmployeeDashboard extends StatefulWidget {
   @override
   _EmployeeDashboardState createState() => _EmployeeDashboardState();
 }
-void showTeamInPopup(BuildContext context) {
-  void handleCheckInOut() {
-    print("Check-In/Out handled");
-  }
 
-  showDialog(
-    context: context,
-    builder: (BuildContext context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          bool isPendingSelected = true;
-          List<String> workers = ['Worker 1', 'Worker 2', 'Worker 3', 'Worker 4'];
-          List<String> filteredWorkers = workers;
-
-          return AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            content: Container(
-              width: MediaQuery.of(context).size.width * 0.9, // Increase width
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Team Check-In',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  TextField(
-                    onChanged: (value) {
-                      setState(() {
-                        filteredWorkers = workers
-                            .where((worker) => worker.toLowerCase().contains(value.toLowerCase()))
-                            .toList();
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'Search workers by name',
-                      prefixIcon: Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                isPendingSelected = true;
-                              });
-                            },
-                            child: Container(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                color: isPendingSelected ? Colors.white : Colors.transparent,
-                                borderRadius: BorderRadius.circular(4), // Less curve
-                                boxShadow: isPendingSelected
-                                    ? [BoxShadow(color: Colors.black12, blurRadius: 2, spreadRadius: 1)]
-                                    : [],
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Pending',
-                                  style: TextStyle(
-                                    color: Colors.black,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                isPendingSelected = false;
-                              });
-                            },
-                            child: Container(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                color: !isPendingSelected ? Colors.white : Colors.transparent,
-                                borderRadius: BorderRadius.circular(4), // Less curve
-                                boxShadow: !isPendingSelected
-                                    ? [BoxShadow(color: Colors.black12, blurRadius: 2, spreadRadius: 1)]
-                                    : [],
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Checked-In',
-                                  style: TextStyle(
-                                    color: Colors.black,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  if (isPendingSelected)
-                    Column(
-                      children: filteredWorkers.map((worker) {
-                        return ListTile(
-                          leading: Icon(Icons.person),
-                          title: Text(worker),
-                          trailing: ElevatedButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              handleCheckInOut();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.teal,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4), // Less curve
-                              ),
-                            ),
-                            child: Text(
-                              'Check In',
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    )
-                  else
-                    Column(
-                      children: filteredWorkers.map((worker) {
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.green.shade100,
-                            child: Icon(Icons.check, color: Colors.green),
-                          ),
-                          title: Text(worker),
-                          subtitle: Row(
-                            children: [
-                              Icon(Icons.access_time, size: 16),
-                              SizedBox(width: 4),
-                              Text('Checked in at 10:00 AM'),
-                            ],
-                          ),
-                          trailing: ElevatedButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4), // Less curve
-                              ),
-                            ),
-                            child: Text(
-                              'Check Out',
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-    },
-  );
-}
 
 class _EmployeeDashboardState extends State<EmployeeDashboard> {
   bool isCheckedIn = false;
   DateTime? checkInTime;
   OverlayEntry? _overlayEntry;
   bool showAllUpdates = false;
-  List<dynamic> updates = []; // List to store updates from the API
+  List<dynamic> updates = [];// List to store updates from the API
+  List<dynamic> users = [];
   Timer? _timer;
+
+  List<CameraDescription> cameras = [];
+  CameraController? _cameraController;
+  String? selectedUser;
+  String? _capturedImagePath;
+
+  String _getGreetingMessage() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return 'Good Morning, ';
+    } else if (hour < 17) {
+      return 'Good Afternoon, ';
+    } else {
+      return 'Good Evening, ';
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     fetchUpdates(); // Fetch updates when the widget is initialized
+    fetchUsers();
     _timer = Timer.periodic(Duration(minutes: 1), (timer) {
       fetchUpdates(); // Fetch updates every minute
     });
+    _initializeCamera();
   }
 
   @override
   void dispose() {
-    _timer?.cancel(); // Cancel the timer when the widget is disposed
+    _timer?.cancel();
+    _cameraController?.dispose();// Cancel the timer when the widget is disposed
     super.dispose();
+  }
+
+  Future<void> _initializeCamera() async {
+    cameras = await availableCameras();
+    _cameraController = CameraController(
+      cameras.firstWhere((camera) => camera.lensDirection == CameraLensDirection.front),
+      ResolutionPreset.medium,
+    );
+    await _cameraController!.initialize();
+    setState(() {});
+  }
+
+
+  void showCameraPopup(BuildContext context, String user) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                height: 350,
+                width: 400,
+                child: _cameraController != null && _cameraController!.value.isInitialized
+                    ? CameraPreview(_cameraController!)
+                    : Center(child: CircularProgressIndicator()),
+              ),
+              SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () => _capturePhoto(user),
+                child: Text('Capture'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _capturePhoto(String user) async {
+    if (_cameraController != null && _cameraController!.value.isInitialized) {
+      // Turn off the flashlight before capturing the photo
+      await _cameraController!.setFlashMode(FlashMode.off);
+
+      final XFile file = await _cameraController!.takePicture();
+      setState(() {
+        _capturedImagePath = file.path;
+      });
+
+      print('Captured Image Path: $_capturedImagePath');
+      print('Selected User: $user');
+
+      // Show verifying dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false, // Prevent dismissing while verifying
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Verifying...'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 10),
+                Text('Please wait while we verify the photo...')
+              ],
+            ),
+          );
+        },
+      );
+
+      try {
+        // Send the image and user to the API endpoint
+        var request = http.MultipartRequest(
+          'POST',
+          Uri.parse('http://192.168.0.200:8082/attendance/checkin'),
+        );
+
+        request.fields['employeeId'] = user;
+
+        // Determine MIME type
+        String? mimeType = lookupMimeType(_capturedImagePath!) ?? 'image/jpeg';
+        var mediaType = MediaType.parse(mimeType);
+
+        request.files.add(await http.MultipartFile.fromPath(
+          'file',
+          _capturedImagePath!,
+          contentType: mediaType,
+        ));
+
+        // Send request
+        var response = await request.send();
+        var responseBody = await response.stream.bytesToString();
+        print('Response: $responseBody');
+
+        // Close the verifying dialog before showing the result
+        Navigator.pop(context);
+
+        String statusMessage = responseBody;
+        if (response.statusCode == 200) {
+          if (responseBody.contains('Present')) {
+            statusMessage = 'User is Present';
+          } else if (responseBody.contains('Absent')) {
+            statusMessage = 'User is Absent';
+          }
+        }
+
+        // Show the attendance result dialog
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: Text('Attendance Status'),
+              content: Text(statusMessage),
+              actions: <Widget>[
+                TextButton(
+                  child: Text('OK'),
+                  onPressed: () {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      } catch (e) {
+        Navigator.pop(context); // Close the verifying dialog in case of error
+        print('Error: $e');
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: Text('Error'),
+              content: Text('Failed to verify attendance. Please try again.'),
+              actions: <Widget>[
+                TextButton(
+                  child: Text('OK'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      }
+    }
+  }
+
+
+  void showTeamInPopup(BuildContext context, List<Map<String, String>> workers) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(
+            title: Text('Team Check-In'),
+          ),
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              bool isPendingSelected = true;
+              // Declare filteredWorkers outside the builder function
+              List<String> filteredWorkers = workers.map((worker) => worker['name']!).toList();
+
+              return StatefulBuilder( // Add another StatefulBuilder to maintain state
+                builder: (context, innerSetState) {
+                  return Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          autofocus: true,
+                          onChanged: (value) {
+                            innerSetState(() {
+                              filteredWorkers = workers
+                                  .where((worker) =>
+                                  worker['name']!.toLowerCase().contains(value.toLowerCase()))
+                                  .map((worker) => worker['name']!)
+                                  .toList();
+                            });
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Search workers by name',
+                            prefixIcon: Icon(Icons.search),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+
+                        SizedBox(height: 16),
+
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      isPendingSelected = true;
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: isPendingSelected ? Colors.white : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(4),
+                                      boxShadow: isPendingSelected
+                                          ? [BoxShadow(color: Colors.black12, blurRadius: 2, spreadRadius: 1)]
+                                          : [],
+                                    ),
+                                    child: Center(
+                                      child: Text('Pending', style: TextStyle(color: Colors.black)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      isPendingSelected = false;
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: !isPendingSelected ? Colors.white : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(4),
+                                      boxShadow: !isPendingSelected
+                                          ? [BoxShadow(color: Colors.black12, blurRadius: 2, spreadRadius: 1)]
+                                          : [],
+                                    ),
+                                    child: Center(
+                                      child: Text('Checked-Out', style: TextStyle(color: Colors.black)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        SizedBox(height: 16),
+
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: filteredWorkers.length,
+                            itemBuilder: (context, index) {
+                              String worker = filteredWorkers[index];
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.grey.withOpacity(0.2),
+                                        blurRadius: 4,
+                                        spreadRadius: 1,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                              child: ListTile(
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                leading: CircleAvatar(child: Icon(Icons.person)),
+                                title: Text(worker),
+                                trailing: ElevatedButton(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    showCameraPopup(context, workers.firstWhere((element) => element['name'] == worker)['employeeId']!);
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.teal,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: Text('Check In',
+                                      style: TextStyle(color: Colors.white)),
+                                ),
+                              ),
+                              ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+
+
+
+  void showTeamOutPopup(BuildContext context, List<String> workers) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      transitionDuration: Duration(milliseconds: 300),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            bool isPendingSelected = true;
+            List<String> filteredWorkers = List.from(workers);
+
+            void handleCheckInOut() {
+              print("Check-In/Out handled");
+            }
+
+            return Center(
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  padding: EdgeInsets.all(20),
+                  width: MediaQuery.of(context).size.width * 0.9,
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Team Check-Out',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      // Search Field
+                      TextField(
+                        onChanged: (value) {
+                          setState(() {
+                            filteredWorkers = workers
+                                .where((worker) =>
+                                worker.toLowerCase().contains(value.toLowerCase()))
+                                .toList();
+                          });
+                        },
+                        decoration: InputDecoration(
+                          hintText: 'Search workers by name',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+
+                      // Workers List with Scrollable View
+                      Flexible(
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: filteredWorkers.length,
+                          itemBuilder: (context, index) {
+                            String worker = filteredWorkers[index];
+                            return ListTile(
+                              leading: Icon(Icons.person),
+                              title: Text(worker),
+                              trailing: ElevatedButton(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  handleCheckInOut();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isPendingSelected ? Colors.teal : Colors.red,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                                child: Text(
+                                  isPendingSelected ? 'Check In' : 'Check Out',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
+                              subtitle: !isPendingSelected
+                                  ? Row(
+                                children: [
+                                  Icon(Icons.access_time, size: 16),
+                                  SizedBox(width: 4),
+                                  Text('Checked in at 10:00 AM'),
+                                ],
+                              )
+                                  : null,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> fetchUsers() async {
+    try {
+      final response = await http.get(Uri.parse('http://192.168.0.200:8082/api/users'));
+
+      if (response.statusCode == 200) {
+
+        setState(() {
+          users = json.decode(response.body);
+        });
+
+
+        print(users); // Print the API response
+      } else {
+        print('Failed to load users. Status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching users: $e');
+    }
   }
 
   // Function to fetch updates from the API
@@ -377,7 +657,8 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
       body: Container(
         color: Color(0xFFF4FBFB),
         child: Padding(
-          padding: const EdgeInsets.only(top: 60, left: 16, right: 16, bottom: 16),
+
+          padding: const EdgeInsets.only(top: 60, left: 10, right: 10, bottom: 2),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -392,7 +673,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                         text: TextSpan(
                           children: [
                             TextSpan(
-                              text: 'Good Morning, ',
+                              text: _getGreetingMessage(),
                               style: GoogleFonts.inter(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
@@ -489,6 +770,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                 child: SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+
                     children: [
                       Card(
                         color: Color(0xFFFFDFEFE),
@@ -497,7 +779,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                         ),
                         elevation: 1,
                         child: Padding(
-                          padding: const EdgeInsets.all(10.0),
+                          padding: const EdgeInsets.all(8.0),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -560,7 +842,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                                 children: [
                                   ElevatedButton.icon(
                                     onPressed: () {
-                                      showTeamInPopup(context);
+                                      showTeamInPopup(context, users.map((user) => {'name': user['name'] as String, 'employeeId': user['employeeId'] as String}).toList());
                                     },
                                     icon: Icon(Icons.people, size: 18),
                                     label: Text("Team In"),
@@ -574,9 +856,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                                       padding: EdgeInsets.symmetric(horizontal: 35, vertical: 12),
                                     ),
                                   ),
+                                  SizedBox(width: 10),
                                   ElevatedButton.icon(
                                     onPressed: () {
-
+                                      showTeamOutPopup(context, ['Alice', 'Bob', 'Charlie', 'David', 'Eve']);
                                     },
                                     icon: Icon(Icons.exit_to_app, size: 18),
                                     label: Text("Team Out"),
@@ -597,6 +880,18 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                         ),
                       ),
                       SizedBox(height: 20),
+                      Padding(
+                padding: const EdgeInsets.only(left: 16.0),
+                child: Text(
+                  'Quick Actions',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+                      SizedBox(height: 12),
                       _buildQuickActions(context),
                       SizedBox(height: 20),
                       _buildAgendaOfTheDay(),
@@ -744,6 +1039,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
       ),
     );
   }
+
   Widget _buildLatestUpdates() {
     List displayedUpdates = showAllUpdates ? updates : updates.take(3).toList();
 
