@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'employee-dashborad.dart';
+import 'splash_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -11,26 +11,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      builder: (context, child) {
-        return MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.linear(1.0), // Prevent font scaling
-            ),
-            child: child!);
-      },
       debugShowCheckedModeBanner: false,
+      title: 'Medhir',
       theme: ThemeData(
-        primaryColor: Colors.teal,
-        scaffoldBackgroundColor: Colors.grey[100],
-        useMaterial3: true,
+        primarySwatch: Colors.teal,
+        scaffoldBackgroundColor: const Color(0xFFF4FBFB),
       ),
-      // home: const HomePage(),
-      //  home: const LeaveManagementScreen(),
-      // home: ExpenseForm(),
-      // home: SalaryPayrollPage(),
-      //home: PayslipScreen(),
-      // home: MyProfileScreen(),
-      home: const EmployeeDashboard(),
+      home: const SplashScreen(),
     );
   }
 }

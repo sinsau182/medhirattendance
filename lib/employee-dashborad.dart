@@ -4,8 +4,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:medhir/leave-management.dart';
 import 'package:medhir/payroll.dart';
 import 'attendance.dart';
+import 'login_screen.dart';
 import 'myprofile.dart';
-import 'notification.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:medhir/check-in.dart';
 import 'package:http/http.dart' as http;
@@ -14,6 +14,7 @@ import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:mime/mime.dart';
 import 'package:http_parser/http_parser.dart';
+import 'package:flutter/services.dart';
 
 void main() {
   runApp(MaterialApp(
@@ -33,13 +34,10 @@ class EmployeeDashboard extends StatefulWidget {
   _EmployeeDashboardState createState() => _EmployeeDashboardState();
 }
 
-
 class _EmployeeDashboardState extends State<EmployeeDashboard> {
   bool isCheckedIn = false;
   DateTime? checkInTime;
   OverlayEntry? _overlayEntry;
-  bool showAllUpdates = false;
-  List<dynamic> updates = [];// List to store updates from the API
   List<dynamic> users = [];
   Timer? _timer;
 
@@ -47,6 +45,45 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   CameraController? _cameraController;
   String? selectedUser;
   String? _capturedImagePath;
+
+  // Role switching
+  int _selectedRole = 0; // 0: Employee, 1: Manager, 2: HR
+  final List<String> _roles = ['Employee', 'Manager', 'HR'];
+
+  // Company selection for HR
+  String _selectedCompany = 'Medhir Technologies';
+  final List<Map<String, dynamic>> _companies = [
+    {
+      'name': 'Medhir Technologies',
+      'id': 'MT001',
+      'stats': {
+        'totalEmployees': 150,
+        'onLeave': 12,
+        'presentToday': 138,
+        'halfDay': 5,
+      }
+    },
+    {
+      'name': 'Medhir Healthcare',
+      'id': 'MH001',
+      'stats': {
+        'totalEmployees': 85,
+        'onLeave': 8,
+        'presentToday': 75,
+        'halfDay': 2,
+      }
+    },
+    {
+      'name': 'Medhir Solutions',
+      'id': 'MS001',
+      'stats': {
+        'totalEmployees': 120,
+        'onLeave': 10,
+        'presentToday': 108,
+        'halfDay': 2,
+      }
+    },
+  ];
 
   String _getGreetingMessage() {
     final hour = DateTime.now().hour;
@@ -62,18 +99,19 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   @override
   void initState() {
     super.initState();
-    fetchUpdates(); // Fetch updates when the widget is initialized
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.white,
+      statusBarIconBrightness: Brightness.dark, // dark icons for Android
+      statusBarBrightness: Brightness.light, // dark icons for iOS
+    ));
     fetchUsers();
-    _timer = Timer.periodic(Duration(minutes: 1), (timer) {
-      fetchUpdates(); // Fetch updates every minute
-    });
     _initializeCamera();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    _cameraController?.dispose();// Cancel the timer when the widget is disposed
+    _cameraController?.dispose();
     super.dispose();
   }
 
@@ -87,6 +125,31 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     setState(() {});
   }
 
+  Future<void> fetchUsers() async {
+    try {
+      final response = await http.get(Uri.parse('http://192.168.0.200:8082/api/users'));
+      if (response.statusCode == 200) {
+        setState(() {
+          users = json.decode(response.body);
+        });
+      } else {
+        print('Failed to load users. Status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching users: $e');
+    }
+  }
+
+  void handleCheckInOut() {
+    if (isCheckedIn) {
+      handleCheckOut();
+      setState(() {
+        isCheckedIn = false;
+      });
+    } else {
+      handleCheckIn();
+    }
+  }
 
   void showCameraPopup(BuildContext context, String user) {
     showDialog(
@@ -224,7 +287,6 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
       }
     }
   }
-
 
   void showTeamInPopup(BuildContext context, List<Map<String, String>> workers) {
     Navigator.push(
@@ -382,9 +444,6 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     );
   }
 
-
-
-
   void showTeamOutPopup(BuildContext context, List<String> workers) {
     showGeneralDialog(
       context: context,
@@ -497,55 +556,6 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     );
   }
 
-  Future<void> fetchUsers() async {
-    try {
-      final response = await http.get(Uri.parse('http://192.168.0.200:8082/api/users'));
-
-      if (response.statusCode == 200) {
-
-        setState(() {
-          users = json.decode(response.body);
-        });
-
-
-        print(users); // Print the API response
-      } else {
-        print('Failed to load users. Status code: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Error fetching users: $e');
-    }
-  }
-
-  // Function to fetch updates from the API
-  Future<void> fetchUpdates() async {
-    try {
-      final response = await http.get(Uri.parse('http://192.168.0.200:8084/updates/emp123'));
-
-      if (response.statusCode == 200) {
-        print('API Response: ${response.body}'); // Print the API response
-        setState(() {
-          updates = json.decode(response.body); // Parse and store the updates
-        });
-      } else {
-        print('Failed to load updates. Status code: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Error fetching updates: $e');
-    }
-  }
-
-  void handleCheckInOut() {
-    if (isCheckedIn) {
-      handleCheckOut();
-      setState(() {
-        isCheckedIn = false;
-      });
-    } else {
-      handleCheckIn();
-    }
-  }
-
   void showTopPopup(String message, String subMessage) {
     _overlayEntry?.remove();
 
@@ -650,389 +660,929 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        color: Color(0xFFF4FBFB),
-        child: Padding(
-
-          padding: const EdgeInsets.only(top: 60, left: 10, right: 10, bottom: 2),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Good Morning Row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
+      backgroundColor: const Color(0xFFF7FAFC),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Sticky Header Card
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF3B82F6), Color(0xFF60A5FA)],
+                  ),
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0xFF3B82F6).withOpacity(0.08),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      RichText(
-                        text: TextSpan(
+                      // Top Row: Greeting, Date, Profile
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            TextSpan(
-                              text: _getGreetingMessage(),
-                              style: GoogleFonts.inter(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _getGreetingMessage(),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Alex',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      AnimatedSmiley(),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    DateFormat('EEEE, d MMMM y').format(DateTime.now()),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            TextSpan(
-                              text: 'Alex',
-                              style: GoogleFonts.inter(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.teal,
-                              ),
+                            const SizedBox(width: 12),
+                            Row(
+                              children: [
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(context, MaterialPageRoute(builder: (context) => MyProfileScreen()));
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 3),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black12,
+                                          blurRadius: 8,
+                                          offset: Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: CircleAvatar(
+                                      radius: 32,
+                                      backgroundImage: AssetImage('assets/avatar.png'),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                IconButton(
+                                  onPressed: () {
+                                    Navigator.pushAndRemoveUntil(
+                                      context,
+                                      MaterialPageRoute(builder: (context) => LoginScreen()),
+                                      (route) => false,
+                                    );
+                                  },
+                                  icon: Icon(Icons.logout, color: Colors.white, size: 28),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                      Text(
-                        DateFormat('EEEE, d MMMM y').format(DateTime.now()),
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.black38,
+                      const SizedBox(height: 18),
+                      // Full-width Role Switcher
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black12.withOpacity(0.04),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final tabCount = _roles.length;
+                              final tabWidth = (constraints.maxWidth - (tabCount - 1) * 4) / tabCount;
+                              return Stack(
+                                children: [
+                                  // Sliding pill indicator
+                                  AnimatedPositioned(
+                                    left: _selectedRole * (tabWidth + 4),
+                                    top: 0,
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeInOut,
+                                    child: Container(
+                                      width: tabWidth,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.blue.withOpacity(0.08),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  Row(
+                                    children: List.generate(_roles.length, (i) {
+                                      final bool selected = _selectedRole == i;
+                                      IconData icon;
+                                      switch (i) {
+                                        case 0:
+                                          icon = Icons.person_outline;
+                                          break;
+                                        case 1:
+                                          icon = Icons.manage_accounts_outlined;
+                                          break;
+                                        case 2:
+                                          icon = Icons.admin_panel_settings_outlined;
+                                          break;
+                                        default:
+                                          icon = Icons.person_outline;
+                                      }
+                                      return GestureDetector(
+                                        onTap: () => setState(() => _selectedRole = i),
+                                        child: Container(
+                                          width: tabWidth,
+                                          height: 44,
+                                          alignment: Alignment.center,
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                icon,
+                                                size: 18,
+                                                color: selected ? Color(0xFF3B82F6) : Colors.white,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                _roles[i],
+                                                style: GoogleFonts.inter(
+                                                  fontWeight: FontWeight.w600,
+                                                  color: selected ? Color(0xFF3B82F6) : Colors.white,
+                                                  fontSize: 15,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ],
                   ),
+                ),
+              ),
+            ),
+            // Sticky Company Selector (only for HR role)
+            if (_selectedRole == 2)
+              Container(
+                color: const Color(0xFFF7FAFC),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.teal.withOpacity(0.07),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => _buildCompanySelector(),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            Icon(LucideIcons.building2, color: const Color(0xFF04AF9E), size: 20),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Selected Company',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: Colors.black54,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _selectedCompany,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(LucideIcons.chevronDown, color: const Color(0xFF04AF9E)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // Scrollable Content
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 24),
+                    // Main content for selected role
+                    Builder(
+                      builder: (context) {
+                        if (_selectedRole == 0) {
+                          return _buildEmployeeContent(context);
+                        } else if (_selectedRole == 1) {
+                          return _buildManagerContent(context);
+                        } else {
+                          return _buildHRContent(context);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompanySelector() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Colors.grey.shade200),
+              ),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  'Select Company',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Spacer(),
+                IconButton(
+                  icon: Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          ListView.builder(
+            shrinkWrap: true,
+            itemCount: _companies.length,
+            itemBuilder: (context, index) {
+              final company = _companies[index];
+              final isSelected = company['name'] == _selectedCompany;
+              return ListTile(
+                leading: Icon(
+                  LucideIcons.building2,
+                  color: isSelected ? const Color(0xFF04AF9E) : Colors.grey,
+                ),
+                title: Text(
+                  company['name'],
+                  style: GoogleFonts.inter(
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected ? const Color(0xFF04AF9E) : Colors.black87,
+                  ),
+                ),
+                trailing: isSelected
+                    ? Icon(Icons.check_circle, color: const Color(0xFF04AF9E))
+                    : null,
+                onTap: () {
+                  setState(() {
+                    _selectedCompany = company['name'];
+                  });
+                  Navigator.pop(context);
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Modernized Employee Content
+  Widget _buildEmployeeContent(BuildContext context) {
+    final bool checkedIn = isCheckedIn;
+    final Color accent = const Color(0xFF04AF9E);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Modern, unified Attendance/Status Card
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7FAFC),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.grey.shade200, width: 1.5),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Status Row
                   Row(
                     children: [
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => NotificationScreen()),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: checkedIn ? accent.withOpacity(0.12) : Colors.grey[200],
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          checkedIn ? Icons.check : Icons.radio_button_unchecked,
+                          color: checkedIn ? accent : Colors.grey[500],
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        checkedIn
+                                ? 'Checked in at \t	t${checkInTime!.hour}:${checkInTime!.minute.toString().padLeft(2, '0')}'
+                                : 'Not checked in yet',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black87,
+                            ),
                           ),
-                          child: Stack(
-                            clipBehavior: Clip.none, // Allows the Positioned widget to go out of bounds
-                            children: [
-                              Icon(
-                                Icons.notifications_outlined,
-                                color: Colors.black,
-                                size: 28,
-                              ),
-                              Positioned(
-                                top: -3,
-                                right: -3,
-                                child: Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 2),
-                                  ),
-                                ),
-                              ),
-                            ],
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  // Check-In/Out Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: handleCheckInOut,
+                      icon: Icon(checkedIn ? Icons.logout : Icons.login, color: Colors.teal),
+                      label: Text(
+                        checkedIn ? 'Check Out' : 'Self Check-In',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.teal,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.teal, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: Colors.transparent,
+                        textStyle: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 32),
+        _buildQuickActionsSection(context, [
+          {
+            'label': 'Leave',
+            'icon': LucideIcons.calendar,
+            'color': Colors.blue,
+            'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => LeaveManagementScreen())),
+          },
+          {
+            'label': 'Attendance',
+            'icon': LucideIcons.clock,
+            'color': Colors.purple,
+            'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => AttendanceScreen())),
+          },
+          {
+            'label': 'Pay Slip',
+            'icon': Icons.receipt_long,
+            'color': Colors.orange,
+            'onTap': () => print('Pay Slip tapped'),
+          },
+          {
+            'label': 'Income',
+            'icon': Icons.trending_up,
+            'color': Colors.green,
+            'onTap': () => print('Income tapped'),
+          },
+          {
+            'label': 'Expense',
+            'icon': Icons.trending_down,
+            'color': Colors.red,
+            'onTap': () => print('Expense tapped'),
+          },
+          {
+            'label': 'Leads',
+            'icon': LucideIcons.users,
+            'color': Colors.teal,
+            'onTap': () {},
+          },
+        ]),
+      ],
+    );
+  }
+
+  // Manager Content
+  Widget _buildManagerContent(BuildContext context) {
+    final Color accent = const Color(0xFF04AF9E);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Team Attendance Card
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7FAFC),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.grey.shade200, width: 1.5),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Team Attendance',
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            showTeamInPopup(context, users.map((user) => {'name': user['name'] as String, 'employeeId': user['employeeId'] as String}).toList());
+                          },
+                          icon: Icon(Icons.people, color: accent, size: 20),
+                          label: Text('Team In', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: accent)),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: accent, width: 1.2),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                         ),
                       ),
-                      SizedBox(width: 10), // ✅ Moved inside the
-                      Row(
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              print('Profile Picture Clicked');
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => MyProfileScreen()),
-                              );
-                            },
-                            child: CircleAvatar(
-                              backgroundColor: Colors.grey.shade300,
-                              backgroundImage: AssetImage('assets/avatar.png'),
-                            ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            showTeamOutPopup(context, ['Alice', 'Bob', 'Charlie', 'David', 'Eve']);
+                          },
+                          icon: Icon(Icons.exit_to_app, color: Colors.red, size: 20),
+                          label: Text('Team Out', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.red)),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: Colors.red, width: 1.2),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
                 ],
               ),
-              SizedBox(height: 30),
-
-              // Today's Status Card
-
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-
+            ),
+          ),
+        ),
+        const SizedBox(height: 32),
+        // Open Requests with new design
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7FAFC),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: Colors.red.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  // TODO: Implement open requests navigation
+                },
+                borderRadius: BorderRadius.circular(24),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
                     children: [
-                      Card(
-                        color: Color(0xFFFFDFEFE),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        elevation: 1,
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Today's Status",
-                                style: GoogleFonts.inter(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                              SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.circle,
-                                    size: 12,
-                                    color: isCheckedIn ? Colors.teal : Colors.grey.shade600,
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    isCheckedIn
-                                        ? 'Checked in at ${checkInTime!.hour}:${checkInTime!.minute.toString().padLeft(2, '0')}'
-                                        : 'Not checked in yet',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 14,
-                                      color: Colors.grey.shade600,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 12),
-                              // Self Check-In Button
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton(
-                                  onPressed: handleCheckInOut,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isCheckedIn ? Colors.red.shade400 : Color(0xFF04AF9E),
-                                    foregroundColor: Colors.white,
-                                    padding: EdgeInsets.symmetric(vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    elevation: 1,
-                                  ),
-                                  child: Text(
-                                    isCheckedIn ? 'Check Out' : 'Self Check-In',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(height: 10),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  ElevatedButton.icon(
-                                    onPressed: () {
-                                      showTeamInPopup(context, users.map((user) => {'name': user['name'] as String, 'employeeId': user['employeeId'] as String}).toList());
-                                    },
-                                    icon: Icon(Icons.people, size: 18),
-                                    label: Text("Team In"),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.grey.shade100,
-                                      foregroundColor: Colors.black87,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        side: BorderSide(color: Colors.transparent),
-                                      ),
-                                      padding: EdgeInsets.symmetric(horizontal: 35, vertical: 12),
-                                    ),
-                                  ),
-                                  SizedBox(width: 10),
-                                  ElevatedButton.icon(
-                                    onPressed: () {
-                                      showTeamOutPopup(context, ['Alice', 'Bob', 'Charlie', 'David', 'Eve']);
-                                    },
-                                    icon: Icon(Icons.exit_to_app, size: 18),
-                                    label: Text("Team Out"),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.grey.shade100,
-                                      foregroundColor: Colors.black87,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        side: BorderSide(color: Colors.transparent),
-                                      ),
-                                      padding: EdgeInsets.symmetric(horizontal: 35, vertical: 12),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.red.withOpacity(0.3),
+                            width: 1.5,
                           ),
                         ),
+                        child: Icon(LucideIcons.bell, color: Colors.red, size: 20),
                       ),
-                      SizedBox(height: 20),
-                      Padding(
-                padding: const EdgeInsets.only(left: 16.0),
-                child: Text(
-                  'Quick Actions',
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-                      SizedBox(height: 12),
-                      _buildQuickActions(context),
-                      SizedBox(height: 20),
-                      _buildAgendaOfTheDay(),
-                      SizedBox(height: 20),
-                      _buildLatestUpdates(),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Open Requests',
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '3 pending approvals',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.red.withOpacity(0.3),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Icon(Icons.arrow_forward_ios, color: Colors.red, size: 16),
+                      ),
                     ],
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildQuickActions(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        _quickActionItem('Leave', LucideIcons.calendar, Colors.blue, () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => LeaveManagementScreen()),
-          );
-        }),
-        _quickActionItem('Attendance', LucideIcons.clock, Colors.purple, () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => AttendanceScreen()),
-          );
-        }),
-        _quickActionItem('Payroll', LucideIcons.creditCard, Colors.orange, () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => SalaryPayrollPage()),
-          );
-        }),
+        const SizedBox(height: 32),
+        _buildQuickActionsSection(context, [
+          {
+            'label': 'Team',
+            'icon': LucideIcons.users,
+            'color': Colors.blue,
+            'onTap': () {},
+          },
+          {
+            'label': 'Attendance',
+            'icon': LucideIcons.clock,
+            'color': Colors.purple,
+            'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => AttendanceScreen())),
+          },
+          {
+            'label': 'Leads',
+            'icon': LucideIcons.target,
+            'color': Colors.green,
+            'onTap': () {},
+          },
+        ]),
+        const SizedBox(height: 32),
       ],
     );
   }
 
-  Widget _quickActionItem(String label, IconData icon, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          CircleAvatar(
-            backgroundColor: color.withOpacity(0.1),
-            radius: 24,
-            child: Icon(icon, color: color),
+  // HR Content
+  Widget _buildHRContent(BuildContext context) {
+    final Color accent = const Color(0xFF04AF9E);
+    final selectedCompanyData = _companies.firstWhere((company) => company['name'] == _selectedCompany);
+    final stats = selectedCompanyData['stats'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // HR Overview Card
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7FAFC),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: Colors.grey.shade200,
+                width: 1.5,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'HR Overview',
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatCard(
+                          'Total Employees',
+                          stats['totalEmployees'].toString(),
+                          LucideIcons.users,
+                          Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildStatCard(
+                          'On Leave',
+                          stats['onLeave'].toString(),
+                          LucideIcons.umbrella,
+                          Colors.purple,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatCard(
+                          'Present Today',
+                          stats['presentToday'].toString(),
+                          LucideIcons.check,
+                          Colors.green,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildStatCard(
+                          'Half Day',
+                          stats['halfDay'].toString(),
+                          LucideIcons.clock,
+                          const Color(0xFF04AF9E),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 14, color: Colors.black54),
+        ),
+        const SizedBox(height: 32),
+        // Open Requests with new design
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7FAFC),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: Colors.red.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  // TODO: Implement open requests navigation
+                },
+                borderRadius: BorderRadius.circular(24),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.red.withOpacity(0.3),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Icon(LucideIcons.bell, color: Colors.red, size: 20),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Open Requests',
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '8 pending approvals',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.red.withOpacity(0.3),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Icon(Icons.arrow_forward_ios, color: Colors.red, size: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 32),
+        _buildQuickActionsSection(context, [
+          {
+            'label': 'Employees',
+            'icon': LucideIcons.users,
+            'color': Colors.blue,
+            'onTap': () {},
+          },
+          {
+            'label': 'Attendance',
+            'icon': LucideIcons.clock,
+            'color': Colors.purple,
+            'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => AttendanceScreen())),
+          },
+          {
+            'label': 'Payroll',
+            'icon': LucideIcons.creditCard,
+            'color': Colors.orange,
+            'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => SalaryPayrollPage())),
+          },
+          {
+            'label': 'Settings',
+            'icon': LucideIcons.settings,
+            'color': Colors.grey,
+            'onTap': () {},
+          },
+        ]),
+        const SizedBox(height: 32),
+      ],
     );
   }
 
-  Widget _buildAgendaOfTheDay() {
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16), // Rounded corners
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1), // Light shadow
-            spreadRadius: 1,
-            blurRadius: 8,
-            offset: const Offset(0, 4), // Shadow at the bottom
-          ),
-        ],
+        color: const Color(0xFFF7FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: color.withOpacity(0.3),
+          width: 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.start,
             children: [
-              Icon(LucideIcons.calendarClock, color: Colors.teal),
-              const SizedBox(width: 10),
-              Text(
-                'Agenda of the Day',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Container(
+                padding: EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: color.withOpacity(0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: Icon(icon, color: color, size: 18),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _agendaItem('Team Standup', '10:00 AM', LucideIcons.users, Colors.blue),
-          _agendaItem('Lunch Break', '12:30 PM', LucideIcons.coffee, Colors.orange),
-          _agendaItem('Quarterly Review', '02:00 PM', LucideIcons.calendarClock, Colors.purple),
-          _agendaItem('Submit Weekly Report', '04:30 PM', LucideIcons.bookOpen, Colors.green),
-        ],
-      ),
-    );
-  }
-
-  Widget _agendaItem(String title, String time, IconData icon, Color color) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12), // Space between items
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12), // Padding inside the container
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F0F0), // Light grey background
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05), // Light shadow for depth
-            spreadRadius: 1,
-            blurRadius: 6,
-            offset: const Offset(0, 2), // Subtle shadow below
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: color.withOpacity(0.1),
-                child: Icon(icon, color: color),
-              ),
-              const SizedBox(width: 16), // Space between icon and text
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: Colors.black54,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 6),
           Text(
-            time,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.black54,
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
             ),
           ),
         ],
@@ -1040,117 +1590,112 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     );
   }
 
-  Widget _buildLatestUpdates() {
-    List displayedUpdates = showAllUpdates ? updates : updates.take(3).toList();
-
-    return _playCard(
-      'Latest Updates',
-      displayedUpdates.map((update) {
-        String title = update['message'] ?? 'No Title';
-        String time = update['timestamp'] != null ? DateFormat('EEEE, hh:mm a').format(DateTime.parse(update['timestamp'])) : 'No Time';
-        return _updateItem(title, time, _getIconFromFlag(update['flag']), _getColourFromFlag(update['flag']));
-      }).toList(),
-      footer: GestureDetector(
-        onTap: () {
-          setState(() {
-            showAllUpdates = !showAllUpdates;
-          });
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                showAllUpdates ? 'Show Less' : 'Show More',
-                style: const TextStyle(color: Colors.teal, fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              Icon(
-                showAllUpdates ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                color: Colors.teal,
-              ),
-            ],
+  Widget _modernQuickAction(BuildContext context, {required String label, required IconData icon, required Color color, required VoidCallback onTap, bool isImportant = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 85,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+      decoration: BoxDecoration(
+          color: const Color(0xFFF7FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: color.withOpacity(0.3),
+            width: 1.5,
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _updateItem(String title, String time, IconData icon, Color color) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12), // Space between items
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12), // Padding inside the container
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F0F0), // Light grey background
-        borderRadius: BorderRadius.circular(12), // Rounded corners
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05), // Light shadow for depth
-            spreadRadius: 1,
-            blurRadius: 8,
-            offset: const Offset(0, 4), // Shadow at the bottom
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: color.withOpacity(0.1),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 16), // Space between icon and text
-          Flexible(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: color.withOpacity(0.3),
+                  width: 1.5,
                 ),
-                const SizedBox(height: 4),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(height: 8),
                 Text(
-                  time,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black54,
-                  ),
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: Colors.black87,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
+              ),
+              textAlign: TextAlign.center,
                 ),
               ],
             ),
-          ),
-        ],
       ),
     );
   }
 
-  Widget _playCard(String title, List<Widget> items, {Widget? footer}) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            blurRadius: 6,
-            spreadRadius: 1,
-            offset: const Offset(0, 3),
+  // Helper method to build Quick Actions section
+  Widget _buildQuickActionsSection(BuildContext context, List<Map<String, dynamic>> actions) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Text(
+            'Quick Actions',
+            style: GoogleFonts.inter(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
           ),
-        ],
-        border: Border.all(color: Colors.grey.withOpacity(0.2)), // Added border property
-      ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+            color: const Color(0xFFF7FAFC),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.grey.shade200,
+              width: 1.5,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          ...items,
-          if (footer != null) footer,
-        ],
-      ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: actions.take(3).map((action) => _modernQuickAction(
+                    context,
+                    label: action['label'],
+                    icon: action['icon'],
+                    color: action['color'],
+                    onTap: action['onTap'],
+                  )).toList(),
+                ),
+                if (actions.length > 3) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: actions.skip(3).map((action) => _modernQuickAction(
+                      context,
+                      label: action['label'],
+                      icon: action['icon'],
+                      color: action['color'],
+                      onTap: action['onTap'],
+                    )).toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 32),
+      ],
     );
   }
 }
@@ -1178,5 +1723,72 @@ IconData _getIconFromFlag(String flag) {
       return LucideIcons.handCoins;
     default:
       return Icons.info;
+  }
+}
+
+class AnimatedSmiley extends StatefulWidget {
+  @override
+  State<AnimatedSmiley> createState() => _AnimatedSmileyState();
+}
+
+class _AnimatedSmileyState extends State<AnimatedSmiley> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    
+    // Create a sequence of animations
+    _animation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 1.1),
+        weight: 1,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.1, end: 1.0),
+        weight: 1,
+      ),
+    ]).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    ));
+
+    // Play animation twice then stop
+    _controller.forward().then((_) {
+      Future.delayed(Duration(milliseconds: 500), () {
+        if (mounted) {
+          _controller.forward().then((_) {
+            _controller.stop();
+          });
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _animation.value,
+          child: Text(
+            '🙂',
+            style: TextStyle(fontSize: 26),
+          ),
+        );
+      },
+    );
   }
 }

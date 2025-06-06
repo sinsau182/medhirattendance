@@ -9,6 +9,7 @@ class AttendanceScreen extends StatefulWidget {
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
   DateTime _currentDate = DateTime.now();
+
   String _monthName(int month) {
     const List<String> monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
@@ -50,6 +51,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildLegend(),
+            const SizedBox(height: 20),
             _buildMonthlyCalendar(),
             const SizedBox(height: 20),
             const Text(
@@ -61,6 +64,54 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildLegend() {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        _buildLegendItem('Present', Colors.green),
+        _buildLegendItem('Absent with leave', Colors.lightGreenAccent),
+        _buildLegendItem('Absent', Colors.red),
+        _buildLegendItem('Half Day', Colors.red, Colors.green),
+        _buildLegendItem('Not Joined', Colors.grey),
+        _buildLegendItem('Holiday', Colors.blue),
+      ],
+    );
+  }
+
+  Widget _buildLegendItem(String label, Color color, [Color? secondaryColor]) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: secondaryColor == null ? color : null,
+            gradient: secondaryColor != null
+                ? LinearGradient(
+              colors: [color, secondaryColor],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            )
+                : null,
+          ),
+          child: secondaryColor != null
+              ? CustomPaint(
+            painter: HalfCirclePainter(),
+          )
+              : null,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12),
+        ),
+      ],
     );
   }
 
@@ -123,6 +174,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             itemCount: 42,
             itemBuilder: (context, index) {
               DateTime? day = calendarDays[index];
+              Color? backgroundColor;
+              if (day != null) {
+                if ([2, 9, 16, 23].contains(day.day)) {
+                  backgroundColor = Colors.blue; // Holiday
+                } else if ([1, 3, 4, 5].contains(day.day)) {
+                  backgroundColor = Colors.grey; // Not Joined
+                } else if ([6, 7, 8, 10, 11, 12, 13, 14, 15, 21, 22, 24, 25, 26, 27].contains(day.day)) {
+                  backgroundColor = Colors.green; // Present
+                } else if (day.day == 17) {
+                  backgroundColor = null; // Custom paint for half day
+                } else if (day.day == 18) {
+                  backgroundColor = Colors.red; // Absent
+                } else if ([19, 20].contains(day.day)) {
+                  backgroundColor = Colors.lightGreenAccent; // Absent with leave
+                }
+              }
+
               bool isSelected = day != null &&
                   day.day == DateTime.now().day &&
                   day.month == DateTime.now().month &&
@@ -134,13 +202,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 children: [
                   CircleAvatar(
                     radius: 14,
-                    backgroundColor: isSelected ? Colors.green : Colors.grey.shade200,
-                    child: Text(
-                      '${day.day}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isSelected ? Colors.white : Colors.black,
+                    backgroundColor: backgroundColor ?? (isSelected ? Colors.green : Colors.grey.shade200),
+                    child: day.day == 17
+                        ? CustomPaint(
+                      painter: HalfCirclePainter(),
+                      child: Center(
+                        child: Text(
+                          '${day.day}',
+                          style: const TextStyle(fontSize: 12, color: Colors.black),
+                        ),
                       ),
+                    )
+                        : Text(
+                      '${day.day}',
+                      style: const TextStyle(fontSize: 12, color: Colors.black),
                     ),
                   ),
                 ],
@@ -151,9 +226,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildSummaryTile('Present', '0 days'),
-              _buildSummaryTile('Absent', '0 days'),
-              _buildSummaryTile('Leaves', '0 days'),
+              _buildSummaryTile('Present', '18 days'),
+              _buildSummaryTile('Absent', '1 days'),
+              _buildSummaryTile('Holiday', '4 days'),
             ],
           )
         ],
@@ -172,7 +247,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       _currentDate = DateTime(_currentDate.year, _currentDate.month + 1, 1);
     });
   }
-
 
   Widget _buildSummaryTile(String title, String value) {
     return Column(
@@ -199,8 +273,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       {'date': '23 June 2023', 'status': 'Present', 'hours': '8.3 hrs'},
       {'date': '22 June 2023', 'status': 'Absent', 'hours': '--'},
       {'date': '21 June 2023', 'status': 'Present', 'hours': '8.6 hrs'},
-      {'date': '20 June 2023', 'status': 'Present', 'hours': '8.4 hrs'},
-      {'date': '19 June 2023', 'status': 'Present', 'hours': '8.1 hrs'},
     ];
 
     return Column(
@@ -277,5 +349,47 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         minHeight: 8,
       ),
     );
+  }
+}
+
+class HalfCirclePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.red
+      ..style = PaintingStyle.fill;
+
+    final path = Path()
+      ..moveTo(size.width / 2, 0)
+      ..arcToPoint(
+        Offset(size.width / 2, size.height),
+        radius: Radius.circular(size.width / 2),
+        clockwise: false,
+      )
+      ..close();
+
+    canvas.drawPath(path, paint);
+
+    paint.color = Colors.green;
+    final path2 = Path()
+      ..moveTo(size.width / 2, 0)
+      ..arcToPoint(
+        Offset(size.width / 2, size.height),
+        radius: Radius.circular(size.width / 2),
+        clockwise: true,
+      )
+      ..close();
+
+    canvas.drawPath(path2, paint);
+
+    paint.color = Colors.black;
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 1;
+    canvas.drawLine(Offset(size.width / 2, 0), Offset(size.width / 2, size.height), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return false;
   }
 }
