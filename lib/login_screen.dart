@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:google_fonts/google_fonts.dart';
 import 'employee-dashborad.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'toast.dart';
+
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -15,6 +20,85 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool get isFilled =>
       emailController.text.isNotEmpty && passwordController.text.isNotEmpty;
+
+  Future<void> _login() async {
+    final String email = emailController.text.trim();
+    final String password = passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showError('Email and password are required');
+      return;
+    }
+
+    _showLoading();
+
+    try {
+      final response = await http.post(
+        Uri.parse('http://192.168.0.200:8080/api/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'email': email,
+          'password': password
+        }),
+      );
+
+      Navigator.pop(context); // Close loading dialog
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('Login response: $data');
+
+        if (data['token'] != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('authToken', data['token']);
+
+          // Show Custom Toast
+          ToastHelper.showCustomToast(context);
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => EmployeeDashboard()),
+          );
+        } else {
+          _showError('Invalid login response: No token received');
+        }
+      } else {
+        print('Login failed with status: ${response.statusCode}');
+        print('Response body: ${response.body}');
+
+        try {
+          final data = json.decode(response.body);
+          _showError(data['message'] ?? 'Failed to authenticate');
+        } catch (e) {
+          _showError('Failed to authenticate. Please try again.');
+        }
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      print('Login error: $e');
+      _showError('Connection error. Please check your internet connection.');
+    }
+  }
+
+  void _showLoading() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.teal),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -126,15 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: isFilled
-                              ? () {
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (context) => EmployeeDashboard()),
-                                  );
-                                }
-                              : null,
+                          onPressed: isFilled ? _login : null,
                           style: ElevatedButton.styleFrom(
                             padding: EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(

@@ -29,15 +29,19 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.0.200:8080/auth/login'),
+        Uri.parse('http://192.168.0.200:8080/api/auth/login'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'email': email, 'password': password}),
+        body: json.encode({
+          'email': email,
+          'password': password
+        }),
       );
 
       Navigator.pop(context);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        print('Login response: $data');
 
         if (data['token'] != null) {
           final prefs = await SharedPreferences.getInstance();
@@ -51,15 +55,23 @@ class _LoginPageState extends State<LoginPage> {
             MaterialPageRoute(builder: (context) => const HomePage()),
           );
         } else {
-          _showError(data['message'] ?? 'Invalid login response');
+          _showError('Invalid login response: No token received');
         }
       } else {
-        final data = json.decode(response.body);
-        _showError(data['message'] ?? 'Failed to authenticate');
+        print('Login failed with status: ${response.statusCode}');
+        print('Response body: ${response.body}');
+
+        try {
+          final data = json.decode(response.body);
+          _showError(data['message'] ?? 'Failed to authenticate');
+        } catch (e) {
+          _showError('Failed to authenticate. Please try again.');
+        }
       }
     } catch (e) {
       Navigator.pop(context);
-      _showError('Error during login: $e');
+      print('Login error: $e');
+      _showError('Connection error. Please check your internet connection.');
     }
   }
 

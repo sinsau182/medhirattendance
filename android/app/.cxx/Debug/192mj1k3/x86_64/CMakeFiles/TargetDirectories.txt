@@ -1,0 +1,2 @@
+C:/Users/sinsa/medhirattendance/android/app/.cxx/Debug/192mj1k3/x86_64/CMakeFiles/edit_cache.dir
+C:/Users/sinsa/medhirattendance/android/app/.cxx/Debug/192mj1k3/x86_64/CMakeFiles/rebuild_cache.dir

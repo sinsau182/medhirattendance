@@ -132,7 +132,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
       try {
         var request = http.MultipartRequest(
           'POST',
-          Uri.parse('http://192.168.0.200:8082/attendance/checkin'),
+          Uri.parse('http://localhost:8082/attendance/checkin'),
         );
 
         request.fields['employeeId'] = selectedUser!;

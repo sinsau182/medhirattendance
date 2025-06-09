@@ -214,7 +214,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
         // Send the image and user to the API endpoint
         var request = http.MultipartRequest(
           'POST',
-          Uri.parse('http://192.168.0.200:8082/attendance/checkin'),
+          Uri.parse('http://localhost:8082/attendance/checkin'),
         );
 
         request.fields['employeeId'] = user;
@@ -744,21 +744,21 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                                     Navigator.push(context, MaterialPageRoute(builder: (context) => MyProfileScreen()));
                                   },
                                   child: Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white, width: 3),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black12,
-                                          blurRadius: 8,
-                                          offset: Offset(0, 4),
-                                        ),
-                                      ],
-                                    ),
-                                    child: CircleAvatar(
-                                      radius: 32,
-                                      backgroundImage: AssetImage('assets/avatar.png'),
-                                    ),
+                                    // decoration: BoxDecoration(
+                                    //   shape: BoxShape.circle,
+                                    //   border: Border.all(color: Colors.white, width: 3),
+                                    //   boxShadow: [
+                                    //     BoxShadow(
+                                    //       color: Colors.black12,
+                                    //       blurRadius: 8,
+                                    //       offset: Offset(0, 4),
+                                    //     ),
+                                    //   ],
+                                    // ),
+                                    // child: CircleAvatar(
+                                    //   radius: 32,
+                                    //   backgroundImage: AssetImage('assets/avatar.png'),
+                                    // ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -779,102 +779,102 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                       ),
                       const SizedBox(height: 18),
                       // Full-width Role Switcher
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.18),
-                            borderRadius: BorderRadius.circular(22),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black12.withOpacity(0.04),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final tabCount = _roles.length;
-                              final tabWidth = (constraints.maxWidth - (tabCount - 1) * 4) / tabCount;
-                              return Stack(
-                                children: [
-                                  // Sliding pill indicator
-                                  AnimatedPositioned(
-                                    left: _selectedRole * (tabWidth + 4),
-                                    top: 0,
-                                    duration: const Duration(milliseconds: 250),
-                                    curve: Curves.easeInOut,
-                                    child: Container(
-                                      width: tabWidth,
-                                      height: 44,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(16),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.blue.withOpacity(0.08),
-                                            blurRadius: 6,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  Row(
-                                    children: List.generate(_roles.length, (i) {
-                                      final bool selected = _selectedRole == i;
-                                      IconData icon;
-                                      switch (i) {
-                                        case 0:
-                                          icon = Icons.person_outline;
-                                          break;
-                                        case 1:
-                                          icon = Icons.manage_accounts_outlined;
-                                          break;
-                                        case 2:
-                                          icon = Icons.admin_panel_settings_outlined;
-                                          break;
-                                        default:
-                                          icon = Icons.person_outline;
-                                      }
-                                      return GestureDetector(
-                                        onTap: () => setState(() => _selectedRole = i),
-                                        child: Container(
-                                          width: tabWidth,
-                                          height: 44,
-                                          alignment: Alignment.center,
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                icon,
-                                                size: 18,
-                                                color: selected ? Color(0xFF3B82F6) : Colors.white,
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                _roles[i],
-                                                style: GoogleFonts.inter(
-                                                  fontWeight: FontWeight.w600,
-                                                  color: selected ? Color(0xFF3B82F6) : Colors.white,
-                                                  fontSize: 15,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    }),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ),
-                      ),
+                      // Padding(
+                      //   padding: const EdgeInsets.symmetric(horizontal: 20),
+                      //   child: Container(
+                      //     width: double.infinity,
+                      //     padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                      //     decoration: BoxDecoration(
+                      //       color: Colors.white.withOpacity(0.18),
+                      //       borderRadius: BorderRadius.circular(22),
+                      //       boxShadow: [
+                      //         BoxShadow(
+                      //           color: Colors.black12.withOpacity(0.04),
+                      //           blurRadius: 8,
+                      //           offset: const Offset(0, 2),
+                      //         ),
+                      //       ],
+                      //     ),
+                      //     child: LayoutBuilder(
+                      //       builder: (context, constraints) {
+                      //         final tabCount = _roles.length;
+                      //         final tabWidth = (constraints.maxWidth - (tabCount - 1) * 4) / tabCount;
+                      //         return Stack(
+                      //           children: [
+                      //             // Sliding pill indicator
+                      //             AnimatedPositioned(
+                      //               left: _selectedRole * (tabWidth + 4),
+                      //               top: 0,
+                      //               duration: const Duration(milliseconds: 250),
+                      //               curve: Curves.easeInOut,
+                      //               child: Container(
+                      //                 width: tabWidth,
+                      //                 height: 44,
+                      //                 decoration: BoxDecoration(
+                      //                   color: Colors.white,
+                      //                   borderRadius: BorderRadius.circular(16),
+                      //                   boxShadow: [
+                      //                     BoxShadow(
+                      //                       color: Colors.blue.withOpacity(0.08),
+                      //                       blurRadius: 6,
+                      //                       offset: const Offset(0, 2),
+                      //                     ),
+                      //                   ],
+                      //                 ),
+                      //               ),
+                      //             ),
+                      //             Row(
+                      //               children: List.generate(_roles.length, (i) {
+                      //                 final bool selected = _selectedRole == i;
+                      //                 IconData icon;
+                      //                 switch (i) {
+                      //                   case 0:
+                      //                     icon = Icons.person_outline;
+                      //                     break;
+                      //                   case 1:
+                      //                     icon = Icons.manage_accounts_outlined;
+                      //                     break;
+                      //                   case 2:
+                      //                     icon = Icons.admin_panel_settings_outlined;
+                      //                     break;
+                      //                   default:
+                      //                     icon = Icons.person_outline;
+                      //                 }
+                      //                 return GestureDetector(
+                      //                   onTap: () => setState(() => _selectedRole = i),
+                      //                   child: Container(
+                      //                     width: tabWidth,
+                      //                     height: 44,
+                      //                     alignment: Alignment.center,
+                      //                     child: Row(
+                      //                       mainAxisAlignment: MainAxisAlignment.center,
+                      //                       children: [
+                      //                         Icon(
+                      //                           icon,
+                      //                           size: 18,
+                      //                           color: selected ? Color(0xFF3B82F6) : Colors.white,
+                      //                         ),
+                      //                         const SizedBox(width: 6),
+                      //                         Text(
+                      //                           _roles[i],
+                      //                           style: GoogleFonts.inter(
+                      //                             fontWeight: FontWeight.w600,
+                      //                             color: selected ? Color(0xFF3B82F6) : Colors.white,
+                      //                             fontSize: 15,
+                      //                           ),
+                      //                         ),
+                      //                       ],
+                      //                     ),
+                      //                   ),
+                      //                 );
+                      //               }),
+                      //             ),
+                      //           ],
+                      //         );
+                      //       },
+                      //     ),
+                      //   ),
+                      // ),
                     ],
                   ),
                 ),
@@ -1123,44 +1123,44 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
           ),
         ),
         const SizedBox(height: 32),
-        _buildQuickActionsSection(context, [
-          {
-            'label': 'Leave',
-            'icon': LucideIcons.calendar,
-            'color': Colors.blue,
-            'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => LeaveManagementScreen())),
-          },
-          {
-            'label': 'Attendance',
-            'icon': LucideIcons.clock,
-            'color': Colors.purple,
-            'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => AttendanceScreen())),
-          },
-          {
-            'label': 'Pay Slip',
-            'icon': Icons.receipt_long,
-            'color': Colors.orange,
-            'onTap': () => print('Pay Slip tapped'),
-          },
-          {
-            'label': 'Income',
-            'icon': Icons.trending_up,
-            'color': Colors.green,
-            'onTap': () => print('Income tapped'),
-          },
-          {
-            'label': 'Expense',
-            'icon': Icons.trending_down,
-            'color': Colors.red,
-            'onTap': () => print('Expense tapped'),
-          },
-          {
-            'label': 'Leads',
-            'icon': LucideIcons.users,
-            'color': Colors.teal,
-            'onTap': () {},
-          },
-        ]),
+        // _buildQuickActionsSection(context, [
+        //   {
+        //     'label': 'Leave',
+        //     'icon': LucideIcons.calendar,
+        //     'color': Colors.blue,
+        //     'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => LeaveManagementScreen())),
+        //   },
+        //   {
+        //     'label': 'Attendance',
+        //     'icon': LucideIcons.clock,
+        //     'color': Colors.purple,
+        //     'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => AttendanceScreen())),
+        //   },
+        //   {
+        //     'label': 'Pay Slip',
+        //     'icon': Icons.receipt_long,
+        //     'color': Colors.orange,
+        //     'onTap': () => print('Pay Slip tapped'),
+        //   },
+        //   {
+        //     'label': 'Income',
+        //     'icon': Icons.trending_up,
+        //     'color': Colors.green,
+        //     'onTap': () => print('Income tapped'),
+        //   },
+        //   {
+        //     'label': 'Expense',
+        //     'icon': Icons.trending_down,
+        //     'color': Colors.red,
+        //     'onTap': () => print('Expense tapped'),
+        //   },
+        //   {
+        //     'label': 'Leads',
+        //     'icon': LucideIcons.users,
+        //     'color': Colors.teal,
+        //     'onTap': () {},
+        //   },
+        // ]),
       ],
     );
   }
