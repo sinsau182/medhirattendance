@@ -9,6 +9,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 import 'attendance_popup.dart';
 import 'dropdown.dart';
+import 'home_dashboard.dart';
 
 class CheckInScreen extends StatefulWidget {
   final String? prefilledUser;
@@ -35,7 +36,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
   void initState() {
     super.initState();
     _initializeCamera();
-    _fetchUsers();
+    // _fetchUsers();
     selectedUser = 'emp001';
   }
 
@@ -76,26 +77,26 @@ class _CheckInScreenState extends State<CheckInScreen> {
     }
   }
 
-  Future<void> _fetchUsers() async {
-    try {
-      final response = await http.get(Uri.parse('http://192.168.0.200:8082/api/users'));
-      if (response.statusCode == 200) {
-        List<dynamic> data = json.decode(response.body);
-        List<String> sortedUsers = data.map((user) => user['name'].toString()).toList();
-        sortedUsers.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  // Future<void> _fetchUsers() async {
+  //   try {
+  //     final response = await http.get(Uri.parse('http://192.168.0.200:8082/api/users'));
+  //     if (response.statusCode == 200) {
+  //       List<dynamic> data = json.decode(response.body);
+  //       List<String> sortedUsers = data.map((user) => user['name'].toString()).toList();
+  //       sortedUsers.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
-        if (mounted) {
-          setState(() {
-            users = sortedUsers;
-          });
-        }
-      } else {
-        throw Exception('Failed to load users');
-      }
-    } catch (e) {
-      print('Error fetching users: $e');
-    }
-  }
+  //       if (mounted) {
+  //         setState(() {
+  //           users = sortedUsers;
+  //         });
+  //       }
+  //     } else {
+  //       throw Exception('Failed to load users');
+  //     }
+  //   } catch (e) {
+  //     print('Error fetching users: $e');
+  //   }
+  // }
 
   @override
   void dispose() {
@@ -132,7 +133,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
       try {
         var request = http.MultipartRequest(
           'POST',
-          Uri.parse('http://localhost:8082/attendance/checkin'),
+          Uri.parse('http://192.168.0.200:8082/attendance/checkin'),
         );
 
         request.fields['employeeId'] = selectedUser!;
@@ -152,8 +153,35 @@ class _CheckInScreenState extends State<CheckInScreen> {
         var responseBody = await response.stream.bytesToString();
         print('Response: $responseBody');
 
-
         if (response.statusCode == 200) {
+          try {
+            final decoded = json.decode(responseBody);
+            if (decoded is Map && decoded['message'] == 'Attendance marked successfully') {
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => HomeDashboard()),
+                  (route) => false,
+                );
+              }
+              return;
+            }
+            if (decoded is Map && decoded['message'] == 'Please check out before checking in again') {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Please check out before checking in again'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => HomeDashboard()),
+                  (route) => false,
+                );
+              }
+              return;
+            }
+          } catch (_) {}
+
           if (responseBody.contains('Present')) {
             showAttendancePopup(context, true, () async {}, () {}, selectedUser!); // Show success popup
 
@@ -229,41 +257,6 @@ class _CheckInScreenState extends State<CheckInScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    UserDropdown(
-                      users: users,
-                      selectedUser: selectedUser,
-                      onUserSelected: (user) {
-                        setState(() {
-                          selectedUser = user;
-                        });
-                      },
-                    ),
-                    if (selectedUser != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          "Selected User: $selectedUser",
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.teal.shade800,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 10),
               Container(
                 padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(

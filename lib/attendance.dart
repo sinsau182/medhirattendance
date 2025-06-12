@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -9,6 +10,54 @@ class AttendanceScreen extends StatefulWidget {
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
   DateTime _currentDate = DateTime.now();
+  DateTime? _selectedDate; // Track which date's card is open
+
+  // Legend/status mapping for demo
+  final List<Map<String, dynamic>> legendList = [
+    {'abbr': 'P', 'color': Color(0xFFC8F7D8), 'circle': Color(0xFF34C759), 'label': 'Present'},
+    {'abbr': 'PH', 'color': Color(0xFFC8F7F7), 'circle': Color(0xFF4DD0E1), 'label': 'Present on Holiday'},
+    {'abbr': 'P/A', 'color': Color(0xFFFFF6E0), 'circle': Color(0xFFFFB300), 'label': 'Half Day'},
+    {'abbr': 'PH/A', 'color': Color(0xFFFFF6E0), 'circle': Color(0xFFFFB300), 'label': 'Half Day on Holiday'},
+    {'abbr': 'A', 'color': Color(0xFFFFD6D6), 'circle': Color(0xFFFF3B30), 'label': 'Absent'},
+    {'abbr': 'LOP', 'color': Color(0xFFFFE0E0), 'circle': Color(0xFFD32F2F), 'label': 'Loss of Pay'},
+    {'abbr': 'H', 'color': Color(0xFFF3F3F3), 'circle': Color(0xFFBDBDBD), 'label': 'Holiday'},
+    {'abbr': 'P/LOP', 'color': Color(0xFFE6E6FA), 'circle': Color(0xFF9575CD), 'label': 'Present Half Day on Loss of Pay'},
+  ];
+
+  // Map for calendar lookup
+  final Map<String, Map<String, dynamic>> statusMap = {
+    // Assign each legend type to the first 8 days for testing
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-01': {'status': 'Present', 'abbr': 'P', 'color': Color(0xFFC8F7D8), 'circle': Color(0xFF34C759)},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-02': {'status': 'Present on Holiday', 'abbr': 'PH', 'color': Color(0xFFC8F7F7), 'circle': Color(0xFF4DD0E1)},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-03': {'status': 'Half Day', 'abbr': 'P/A', 'color': Color(0xFFFFF6E0), 'circle': Color(0xFFFFB300)},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-04': {'status': 'Half Day on Holiday', 'abbr': 'PH/A', 'color': Color(0xFFFFF6E0), 'circle': Color(0xFFFFB300)},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-05': {'status': 'Absent', 'abbr': 'A', 'color': Color(0xFFFFD6D6), 'circle': Color(0xFFFF3B30)},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-06': {'status': 'Loss of Pay', 'abbr': 'LOP', 'color': Color(0xFFFFE0E0), 'circle': Color(0xFFD32F2F)},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-07': {'status': 'Holiday', 'abbr': 'H', 'color': Color(0xFFF3F3F3), 'circle': Color(0xFFBDBDBD)},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-08': {'status': 'Present Half Day on Loss of Pay', 'abbr': 'P/LOP', 'color': Color(0xFFE6E6FA), 'circle': Color(0xFF9575CD)},
+    // Today: In Progress
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}': {'status': 'In Progress', 'abbr': 'P', 'color': Colors.orange, 'circle': Colors.orange},
+  };
+
+  // Dummy work hours data for demonstration
+  final Map<String, Map<String, String>> workHoursData = {
+    // Format: 'yyyy-MM-dd': { 'checkIn': '9:00 AM', 'checkOut': '5:30 PM', 'total': '8h 30m', 'status': 'Present' }
+    // Add a few for demo
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-01': {'checkIn': '9:00 AM', 'checkOut': '5:12 PM', 'total': '8h 12m', 'status': 'Present'},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-02': {'checkIn': '9:10 AM', 'checkOut': '5:20 PM', 'total': '8h 10m', 'status': 'Present on Holiday'},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-03': {'checkIn': '9:05 AM', 'checkOut': '1:00 PM', 'total': '4h 0m', 'status': 'Half Day'},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-04': {'checkIn': '10:00 AM', 'checkOut': '2:00 PM', 'total': '4h 0m', 'status': 'Half Day on Holiday'},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-05': {'status': 'Absent'},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-06': {'status': 'Loss of Pay'},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-07': {'status': 'Holiday'},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-08': {'checkIn': '9:30 AM', 'checkOut': '1:30 PM', 'total': '4h 0m', 'status': 'Present Half Day on Loss of Pay'},
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-09': {'checkIn': '9:00 AM', 'checkOut': '5:00 PM', 'total': '8h 0m', 'status': 'Present'},
+    // Today: only check-in, in progress
+    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}': {
+      'checkIn': '10:00 AM',
+      'status': 'In Progress'
+    },
+  };
 
   String _monthName(int month) {
     const List<String> monthNames = [
@@ -32,6 +81,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    DateTime today = DateTime.now();
+    DateTime? visibleDate = _selectedDate;
+    String? visibleDateKey = visibleDate != null ? _dateKey(visibleDate) : null;
+    Map<String, String>? visibleData = visibleDateKey != null ? workHoursData[visibleDateKey] : null;
+
     return Scaffold(
       backgroundColor: Color(0xFFF4FBFB),
       appBar: AppBar(
@@ -54,64 +108,56 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             _buildLegend(),
             const SizedBox(height: 20),
             _buildMonthlyCalendar(),
-            const SizedBox(height: 20),
-            const Text(
-              'Work Hours Timeline',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
             const SizedBox(height: 10),
-            _buildWorkHoursList(),
+            if (visibleDate != null && visibleData != null && visibleData.isNotEmpty)
+              _buildPlayCard(visibleDate, visibleData),
+            SizedBox(height: 40), // Add bottom space to avoid overflow
           ],
         ),
       ),
     );
   }
 
-  Widget _buildLegend() {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        _buildLegendItem('Present', Colors.green),
-        _buildLegendItem('Absent with leave', Colors.lightGreenAccent),
-        _buildLegendItem('Absent', Colors.red),
-        _buildLegendItem('Half Day', Colors.red, Colors.green),
-        _buildLegendItem('Not Joined', Colors.grey),
-        _buildLegendItem('Holiday', Colors.blue),
-      ],
-    );
-  }
+  String _dateKey(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-  Widget _buildLegendItem(String label, Color color, [Color? secondaryColor]) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 16,
-          height: 16,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: secondaryColor == null ? color : null,
-            gradient: secondaryColor != null
-                ? LinearGradient(
-              colors: [color, secondaryColor],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            )
-                : null,
-          ),
-          child: secondaryColor != null
-              ? CustomPaint(
-            painter: HalfCirclePainter(),
-          )
-              : null,
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12),
-        ),
-      ],
+  Widget _buildLegend() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        children: legendList.map((legend) {
+          final abbr = legend['abbr'];
+          final color = legend['color'];
+          final circle = legend['circle'];
+          final label = legend['label'] ?? '';
+          return Container(
+            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: circle,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                SizedBox(width: 6),
+                Text(abbr, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                SizedBox(width: 6),
+                Text(label, style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -174,63 +220,59 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             itemCount: 42,
             itemBuilder: (context, index) {
               DateTime? day = calendarDays[index];
-              Color? backgroundColor;
-              if (day != null) {
-                if ([2, 9, 16, 23].contains(day.day)) {
-                  backgroundColor = Colors.blue; // Holiday
-                } else if ([1, 3, 4, 5].contains(day.day)) {
-                  backgroundColor = Colors.grey; // Not Joined
-                } else if ([6, 7, 8, 10, 11, 12, 13, 14, 15, 21, 22, 24, 25, 26, 27].contains(day.day)) {
-                  backgroundColor = Colors.green; // Present
-                } else if (day.day == 17) {
-                  backgroundColor = null; // Custom paint for half day
-                } else if (day.day == 18) {
-                  backgroundColor = Colors.red; // Absent
-                } else if ([19, 20].contains(day.day)) {
-                  backgroundColor = Colors.lightGreenAccent; // Absent with leave
-                }
-              }
-
-              bool isSelected = day != null &&
-                  day.day == DateTime.now().day &&
-                  day.month == DateTime.now().month &&
-                  day.year == DateTime.now().year;
+              String dateKey = day != null ? _dateKey(day) : '';
+              var legend = statusMap[dateKey];
+              Color? color = legend != null ? (legend['circle'] ?? Colors.orange) : null;
+              bool isSelected = _selectedDate != null && day != null &&
+                day.day == _selectedDate!.day &&
+                day.month == _selectedDate!.month &&
+                day.year == _selectedDate!.year;
+              bool isToday = day != null &&
+                day.day == DateTime.now().day &&
+                day.month == DateTime.now().month &&
+                day.year == DateTime.now().year;
 
               return day == null
                   ? const SizedBox.shrink()
-                  : Column(
-                children: [
-                  CircleAvatar(
-                    radius: 14,
-                    backgroundColor: backgroundColor ?? (isSelected ? Colors.green : Colors.grey.shade200),
-                    child: day.day == 17
-                        ? CustomPaint(
-                      painter: HalfCirclePainter(),
+                  : GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (_selectedDate != null && _selectedDate!.day == day.day && _selectedDate!.month == day.month && _selectedDate!.year == day.year) {
+                            _selectedDate = null; // Toggle off
+                          } else {
+                            _selectedDate = day;
+                          }
+                        });
+                      },
                       child: Center(
-                        child: Text(
-                          '${day.day}',
-                          style: const TextStyle(fontSize: 12, color: Colors.black),
+                        child: AnimatedContainer(
+                          duration: Duration(milliseconds: 120),
+                          width: isSelected ? 34 : 28,
+                          height: isSelected ? 34 : 28,
+                          decoration: BoxDecoration(
+                            color: color ?? Colors.transparent,
+                            shape: BoxShape.circle,
+                            boxShadow: isSelected
+                                ? [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))]
+                                : [],
+                            border: isSelected ? Border.all(color: Colors.black, width: 2) : null,
+                          ),
+                          child: Center(
+                            child: Text(
+                              day.day.toString(),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.black,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    )
-                        : Text(
-                      '${day.day}',
-                      style: const TextStyle(fontSize: 12, color: Colors.black),
-                    ),
-                  ),
-                ],
-              );
+                    );
             },
           ),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildSummaryTile('Present', '18 days'),
-              _buildSummaryTile('Absent', '1 days'),
-              _buildSummaryTile('Holiday', '4 days'),
-            ],
-          )
         ],
       ),
     );
@@ -248,105 +290,158 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     });
   }
 
-  Widget _buildSummaryTile(String title, String value) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        Text(
-          title,
-          style: const TextStyle(fontSize: 14, color: Colors.grey),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWorkHoursList() {
-    final workHours = [
-      {'date': '30 June 2023', 'status': 'Present', 'hours': '8.2 hrs'},
-      {'date': '29 June 2023', 'status': 'Present', 'hours': '8.1 hrs'},
-      {'date': '28 June 2023', 'status': 'Present', 'hours': '8.3 hrs'},
-      {'date': '27 June 2023', 'status': 'Present', 'hours': '8.5 hrs'},
-      {'date': '26 June 2023', 'status': 'Present', 'hours': '8.2 hrs'},
-      {'date': '23 June 2023', 'status': 'Present', 'hours': '8.3 hrs'},
-      {'date': '22 June 2023', 'status': 'Absent', 'hours': '--'},
-      {'date': '21 June 2023', 'status': 'Present', 'hours': '8.6 hrs'},
-    ];
-
-    return Column(
-      children: workHours.map((data) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
+  Widget _buildPlayCard(DateTime date, Map<String, String> data) {
+    String status = data['status'] ?? 'In Progress';
+    String? checkIn = data['checkIn'];
+    String? checkOut = data['checkOut'];
+    String? total = data['total'];
+    Color statusColor;
+    String abbr = '';
+    IconData statusIcon;
+    // Map status to color, abbr, and icon
+    switch (status) {
+      case 'Present':
+        statusColor = Colors.green;
+        abbr = 'P';
+        statusIcon = Icons.check_circle;
+        break;
+      case 'Present on Holiday':
+        statusColor = Color(0xFF4DD0E1);
+        abbr = 'PH';
+        statusIcon = Icons.celebration;
+        break;
+      case 'Half Day':
+        statusColor = Colors.orange;
+        abbr = 'P/A';
+        statusIcon = Icons.adjust;
+        break;
+      case 'Half Day on Holiday':
+        statusColor = Colors.orange;
+        abbr = 'PH/A';
+        statusIcon = Icons.adjust;
+        break;
+      case 'Absent':
+        statusColor = Colors.red;
+        abbr = 'A';
+        statusIcon = Icons.cancel;
+        break;
+      case 'Loss of Pay':
+        statusColor = Color(0xFFD32F2F);
+        abbr = 'LOP';
+        statusIcon = Icons.money_off;
+        break;
+      case 'Holiday':
+        statusColor = Colors.grey;
+        abbr = 'H';
+        statusIcon = Icons.beach_access;
+        break;
+      case 'Present Half Day on Loss of Pay':
+        statusColor = Color(0xFF9575CD);
+        abbr = 'P/LOP';
+        statusIcon = Icons.timelapse;
+        break;
+      case 'In Progress':
+        statusColor = Colors.orange;
+        abbr = 'P';
+        statusIcon = Icons.timelapse;
+        break;
+      default:
+        statusColor = Colors.grey;
+        abbr = '';
+        statusIcon = Icons.info;
+    }
+    return Container(
+      margin: EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 12,
+            offset: Offset(0, 4),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _buildTopRow(data['date']!, data['status']!),
-              const SizedBox(height: 4),
-              const Text(
-                'Work Hours',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(statusIcon, color: statusColor, size: 24),
               ),
-              const SizedBox(height: 6),
-              _buildProgressBar(data['hours']!, data['status']!),
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          status,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: statusColor),
+                        ),
+                        SizedBox(width: 8),
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(abbr, style: TextStyle(fontWeight: FontWeight.bold, color: statusColor)),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      DateFormat('EEEE, dd MMM yyyy').format(date),
+                      style: TextStyle(fontWeight: FontWeight.w500, color: Colors.black54, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildTopRow(String date, String status) {
-    bool isPresent = status == 'Present';
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Icon(
-              isPresent ? Icons.check_circle : Icons.cancel,
-              color: isPresent ? Colors.green : Colors.red,
-              size: 18,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              date,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        Text(
-          status,
-          style: TextStyle(
-            color: isPresent ? Colors.green : Colors.red,
-            fontWeight: FontWeight.bold,
+          Divider(height: 28, thickness: 1, color: Colors.grey[200]),
+          Row(
+            children: [
+              Icon(Icons.login, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Check-In:', style: TextStyle(fontWeight: FontWeight.w500)),
+              SizedBox(width: 8),
+              Text(checkIn ?? '--', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProgressBar(String hours, String status) {
-    bool isPresent = status == 'Present';
-    double value = isPresent ? (double.tryParse(hours.split(' ')[0])! / 10) : 0;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: LinearProgressIndicator(
-        value: value,
-        backgroundColor: Colors.grey.shade300,
-        valueColor: AlwaysStoppedAnimation<Color>(
-          isPresent ? Colors.green : Colors.red,
-        ),
-        minHeight: 8,
+          SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(Icons.logout, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Check-Out:', style: TextStyle(fontWeight: FontWeight.w500)),
+              SizedBox(width: 8),
+              Text(checkOut ?? '--', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(Icons.access_time, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Total:', style: TextStyle(fontWeight: FontWeight.w500)),
+              SizedBox(width: 8),
+              Text(total ?? '--', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+        ],
       ),
     );
   }

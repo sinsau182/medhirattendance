@@ -7,6 +7,8 @@ import 'dart:async';
 import 'package:intl/intl.dart';
 import 'attendance.dart';
 import 'check-in.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class HomeDashboard extends StatefulWidget {
   @override
@@ -17,6 +19,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
   String employeeName = "";
   DateTime _now = DateTime.now();
   Timer? _timer;
+  Map<String, dynamic>? dailyAttendance;
+  bool isLoadingAttendance = false;
 
   // Attendance session state
   bool isCheckedIn = false;
@@ -30,13 +34,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
   void initState() {
     super.initState();
     _loadEmployeeName();
+    _loadDailyAttendance();
     _now = DateTime.now();
+    
+    // Timer for current time only
     _timer = Timer.periodic(Duration(seconds: 1), (timer) {
       setState(() {
         _now = DateTime.now();
-        if (isCheckedIn && sessionStartTime != null) {
-          sessionDuration = DateTime.now().difference(sessionStartTime!);
-        }
       });
     });
   }
@@ -46,6 +50,14 @@ class _HomeDashboardState extends State<HomeDashboard> {
     _timer?.cancel();
     sessionTimer?.cancel();
     super.dispose();
+  }
+
+  // Add this method to handle page focus
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload data when page comes into focus
+    _loadDailyAttendance();
   }
 
   Future<void> _loadEmployeeName() async {
@@ -59,35 +71,201 @@ class _HomeDashboardState extends State<HomeDashboard> {
     }
   }
 
+  Future<void> _loadDailyAttendance() async {
+    if (isLoadingAttendance) return;
+
+    setState(() {
+      isLoadingAttendance = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken');
+      if (token == null) return;
+
+      final today = DateFormat('yyyy-MM-dd').format(_now);
+
+      final response = await http.get(
+        Uri.parse('http://192.168.0.200:8082/attendance/daily/MED102/$today'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final dailyAttendance = data['dailyAttendance'];
+        final logs = dailyAttendance['logs'] as List;
+        for (var log in logs) {
+          final original = DateTime.parse(log['timestamp']);
+          final adjusted = original.add(Duration(hours: 5, minutes: 30));
+          log['timestamp'] = adjusted.toIso8601String();
+        }
+        setState(() {
+          this.dailyAttendance = dailyAttendance;
+          final logs = dailyAttendance['logs'] as List<dynamic>?;
+          isCheckedIn = logs != null && logs.isNotEmpty && logs.last['type'] == 'checkin';
+          if (isCheckedIn && logs != null && logs.isNotEmpty) {
+            sessionStartTime = DateTime.parse(logs.last['timestamp']);
+          } else {
+            sessionStartTime = null;
+          }
+        });
+      } else {
+        setState(() {
+          dailyAttendance = {
+            'logs': [],
+            'employeeId': 'MED102',
+            'date': today,
+          };
+        });
+      }
+    } catch (e) {
+      setState(() {
+        dailyAttendance = {
+          'logs': [],
+          'employeeId': 'MED102',
+          'date': DateFormat('yyyy-MM-dd').format(_now),
+        };
+      });
+    } finally {
+      setState(() {
+        isLoadingAttendance = false;
+      });
+    }
+  }
+
+  // Add refresh function for button clicks
+  Future<void> _refreshAttendance() async {
+    await _loadDailyAttendance();
+  }
+
+  Future<void> _performCheckout() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken');
+      if (token == null) return;
+
+      var uri = Uri.parse('http://192.168.0.200:8082/attendance/checkout');
+      var request = http.MultipartRequest('POST', uri);
+      request.fields['employeeId'] = 'MED102';
+      request.headers['Authorization'] = 'Bearer $token';
+
+      var response = await request.send();
+
+      if (response.statusCode == 200) {
+        setState(() {
+          isCheckedIn = false;
+          sessionStartTime = null;
+          sessionDuration = Duration.zero;
+        });
+        _loadDailyAttendance();
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Check-out failed. Please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error during check-out. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _startSession() {
     setState(() {
       isCheckedIn = true;
       sessionStartTime = DateTime.now();
       sessionDuration = Duration.zero;
     });
+    _loadDailyAttendance(); // Reload data after check-in
   }
 
   void _endSession() {
-    setState(() {
-      isCheckedIn = false;
-      sessionStartTime = null;
-      sessionDuration = Duration.zero;
-    });
+    _performCheckout(); // Call the new checkout function
+  }
+
+  String _formatTime(String timestamp) {
+    final dateTime = DateTime.parse(timestamp);
+    return DateFormat('hh:mm a').format(dateTime);
+  }
+
+  Duration _calculateTotalTime() {
+    if (dailyAttendance == null || dailyAttendance!['logs'] == null) {
+      return Duration.zero;
+    }
+
+    final logs = dailyAttendance!['logs'] as List;
+    Duration total = Duration.zero;
+    
+    for (int i = 0; i < logs.length - 1; i += 2) {
+      if (i + 1 < logs.length) {
+        final checkIn = DateTime.parse(logs[i]['timestamp']);
+        final checkOut = DateTime.parse(logs[i + 1]['timestamp']);
+        total += checkOut.difference(checkIn);
+      }
+    }
+
+    // If last log is check-in, add time until now
+    if (logs.isNotEmpty && logs.last['type'] == 'checkin') {
+      final lastCheckIn = DateTime.parse(logs.last['timestamp']);
+      total += DateTime.now().difference(lastCheckIn);
+    }
+
+    return total;
+  }
+
+  String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    return "${hours}h ${minutes}m";
   }
 
   @override
   Widget build(BuildContext context) {
-    final double progress = sessionDuration.inSeconds / dailyGoalSeconds;
-    final int hours = sessionDuration.inHours;
-    final int minutes = sessionDuration.inMinutes.remainder(60);
-    final int secondsLeft = (dailyGoalSeconds - sessionDuration.inSeconds).clamp(0, dailyGoalSeconds);
+    final List<dynamic>? logs = dailyAttendance?['logs'] as List<dynamic>?;
+    final bool isCurrentlyCheckedIn = logs != null && logs.isNotEmpty && logs.last['type'] == 'checkin';
+    
+    // Calculate total time from all sessions
+    Duration totalSessionTime = Duration.zero;
+    if (logs != null) {
+      for (int i = 0; i < logs.length - 1; i += 2) {
+        if (i + 1 < logs.length) {
+          final checkIn = DateTime.parse(logs[i]['timestamp']);
+          final checkOut = DateTime.parse(logs[i + 1]['timestamp']);
+          totalSessionTime += checkOut.difference(checkIn);
+        }
+      }
+      // Add current session time if last log is check-in
+      if (isCurrentlyCheckedIn && sessionStartTime != null) {
+        totalSessionTime += DateTime.now().difference(sessionStartTime!);
+      }
+    }
+
+    final double progress = totalSessionTime.inSeconds / dailyGoalSeconds;
+    final int hours = totalSessionTime.inHours;
+    final int minutes = totalSessionTime.inMinutes.remainder(60);
+    final int secondsLeft = (dailyGoalSeconds - totalSessionTime.inSeconds).clamp(0, dailyGoalSeconds);
     final int hoursLeft = secondsLeft ~/ 3600;
     final int minutesLeft = (secondsLeft % 3600) ~/ 60;
     final bool goalAchieved = progress >= 1.0;
 
     return Scaffold(
       backgroundColor: Color(0xFFF7F8FA),
-      body: SafeArea(
+      body: RefreshIndicator(
+        onRefresh: _refreshAttendance,
+        child: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
@@ -104,47 +282,82 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("Medhir Attendance",
+                        Text("Medhir Attendance",
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
                           )),
-                      Text(
-                        "Employee: $employeeName",
-                        style: TextStyle(
-                          color: Colors.black54,
-                          fontSize: 13,
+                        Text(
+                          "Employee: $employeeName",
+                          style: TextStyle(
+                            color: Colors.black54,
+                            fontSize: 13,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                   Spacer(),
-                  PopupMenuButton<String>(
-                    icon: Icon(Icons.account_circle, color: Colors.black54),
-                    onSelected: (value) async {
-                      if (value == 'logout') {
-                        final confirm = await showDialog<bool>(
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.account_circle, color: Colors.black54),
+                      onSelected: (value) async {
+                        if (value == 'logout') {
+                        final confirm = await showModalBottomSheet<bool>(
                           context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
-                            content: Text('Are you sure you want to logout?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: Text('Cancel'),
-                              ),
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                          ),
+                          builder: (context) => Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 4,
+                                  margin: EdgeInsets.only(bottom: 16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
                                 ),
-                                icon: Icon(Icons.logout),
-                                label: Text('Logout'),
-                                onPressed: () => Navigator.pop(context, true),
-                              ),
-                            ],
+                                Icon(Icons.logout, color: Colors.red, size: 36),
+                                SizedBox(height: 12),
+                                Text('Logout', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                                SizedBox(height: 8),
+                                Text('Are you sure you want to logout?', style: TextStyle(color: Colors.black54, fontSize: 15)),
+                                SizedBox(height: 24),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: () => Navigator.pop(context, false),
+                                        child: Text('Cancel'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.black87,
+                                          side: BorderSide(color: Colors.grey[300]!),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 16),
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red,
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        icon: Icon(Icons.logout),
+                                        label: Text('Logout'),
+                                        onPressed: () => Navigator.pop(context, true),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         );
                         if (confirm == true) {
@@ -158,37 +371,38 @@ class _HomeDashboardState extends State<HomeDashboard> {
                           }
                         }
                       }
-                    },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: 'logout',
-                        child: Row(
-                          children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(6),
+                      },
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: 'logout',
+                          child: Row(
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                padding: EdgeInsets.all(4),
+                                child: Icon(Icons.logout, color: Colors.red, size: 20),
                               ),
-                              padding: EdgeInsets.all(4),
-                              child: Icon(Icons.logout, color: Colors.red, size: 20),
-                            ),
-                            SizedBox(width: 10),
-                            Text(
-                              'Logout',
-                              style: TextStyle(
-                                color: Colors.red,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
+                              SizedBox(width: 10),
+                              Text(
+                                'Logout',
+                                style: TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 18),
                 ],
               ),
+              SizedBox(height: 18),
+                  ],
+                ),
+                SizedBox(height: 24),
 
 
               // Time Card
@@ -208,21 +422,21 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ),
                 child: Column(
                   children: [
-                    Text(
-                      DateFormat('hh:mm a').format(_now),
-                      style: GoogleFonts.poppins(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
+                      Text(
+                        DateFormat('hh:mm a').format(_now),
+                        style: GoogleFonts.poppins(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
                     SizedBox(height: 4),
                     Text(
-                      DateFormat('EEEE, MMMM d, y').format(_now),
-                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                        DateFormat('EEEE, MMMM d, y').format(_now),
+                        style: TextStyle(color: Colors.black54, fontSize: 12),
                     ),
                     SizedBox(height: 10),
-                    // Checked In/Out Badge
-                    Row(
+                      // Checked In/Out Badge
+                      Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
@@ -255,54 +469,47 @@ class _HomeDashboardState extends State<HomeDashboard> {
                         ),
                       ],
                     ),
-                    // Session Timer Card
-                    if (isCheckedIn && sessionStartTime != null) ...[
-                      SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Color(0xFFF1F6FE),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.access_time, color: Color(0xFF2563EB)),
-                                SizedBox(width: 6),
-                                Text(
-                                  "Current Session",
-                                  style: TextStyle(
-                                    color: Color(0xFF2563EB),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 6),
-                            Text(
-                              _formatDuration(sessionDuration),
-                              style: TextStyle(
-                                color: Color(0xFF232B55),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 28,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      // Session Timer Card
+                    // if (isCheckedIn && sessionStartTime != null) ...[
+                    //   SizedBox(height: 12),
+                    //   Container(
+                    //     width: double.infinity,
+                    //     padding: EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                    //     decoration: BoxDecoration(
+                    //       color: Color(0xFFF1F6FE),
+                    //       borderRadius: BorderRadius.circular(12),
+                    //     ),
+                    //     child: Column(
+                    //       children: [
+                    //         Row(
+                    //           mainAxisAlignment: MainAxisAlignment.center,
+                    //           children: [
+                    //             Icon(Icons.access_time, color: Color(0xFF2563EB)),
+                    //             SizedBox(width: 6),
+                    //             Text(
+                    //               "Current Session",
+                    //               style: TextStyle(
+                    //                 color: Color(0xFF2563EB),
+                    //                 fontWeight: FontWeight.w600,
+                    //                 fontSize: 15,
+                    //               ),
+                    //             ),
+                    //           ],
+                    //         ),
+                    //         SizedBox(height: 6),
+                    //         Text(
+                    //           _formatDuration(sessionDuration),
+                    //           style: TextStyle(
+                    //             color: Color(0xFF232B55),
+                    //             fontWeight: FontWeight.bold,
+                    //             fontSize: 28,
+                    //           ),
+                    //         ),
+                    //       ],
+                    //     ),
+                    //   ),
+                    // ],
                     SizedBox(height: 2),
-                    Text(
-                      "Location verified",
-                      style: TextStyle(
-                        color: Colors.black38,
-                        fontSize: 13,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -312,46 +519,101 @@ class _HomeDashboardState extends State<HomeDashboard> {
               Row(
                 children: [
                   Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => CheckInScreen()),
-                        );
-                      },
-                      icon: Icon(Icons.login, color: Colors.white),
-                      label: Text("Check-In"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFF1DBF73),
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isCheckedIn
+                              ? [Colors.grey.withOpacity(0.1), Colors.grey.withOpacity(0.05)]
+                              : [Color(0xFF1DBF73).withOpacity(0.1), Color(0xFF1DBF73).withOpacity(0.05)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                        elevation: 0,
-                        textStyle: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isCheckedIn ? Colors.grey : Color(0xFF1DBF73),
+                        ),
+                      ),
+                      child: OutlinedButton.icon(
+                        onPressed: isCheckedIn
+                            ? null
+                            : () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => CheckInScreen()),
+                                );
+                                _loadDailyAttendance();
+                              },
+                        icon: Icon(Icons.login, color: isCheckedIn ? Colors.grey : Color(0xFF1DBF73)),
+                        label: Text("Check-In"),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: isCheckedIn ? Colors.grey : Color(0xFF1DBF73),
+                          side: BorderSide.none,
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          textStyle: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                     ),
                   ),
                   SizedBox(width: 12),
                   Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: isCheckedIn ? _endSession : null,
-                      icon: Icon(Icons.logout, color: Colors.white),
-                      label: Text("Check-Out"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isCheckedIn ? Color(0xFF232B55) : Color(0xFFE9E9E9),
-                        foregroundColor: isCheckedIn ? Colors.white : Colors.black26,
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isCheckedIn 
+                            ? [Colors.red.withOpacity(0.1), Colors.red.withOpacity(0.05)]
+                            : [Colors.grey.withOpacity(0.1), Colors.grey.withOpacity(0.05)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                        elevation: 0,
-                        textStyle: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isCheckedIn ? Colors.red : Colors.grey,
+                        ),
+                      ),
+                      child: OutlinedButton.icon(
+                        onPressed: isCheckedIn
+                            ? () async {
+                                await _performCheckout();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          Icon(Icons.check_circle, color: Colors.white),
+                                          SizedBox(width: 8),
+                                          Text('Check-out successful!'),
+                                        ],
+                                      ),
+                                      backgroundColor: Colors.red,
+                                      duration: Duration(seconds: 2),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            : null,
+                        icon: Icon(Icons.logout, color: isCheckedIn ? Colors.red : Colors.grey),
+                        label: Text("Check-Out"),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: isCheckedIn ? Colors.red : Colors.grey,
+                          side: BorderSide.none,
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          textStyle: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
                     ),
@@ -386,45 +648,45 @@ class _HomeDashboardState extends State<HomeDashboard> {
                               fontSize: 16,
                             )),
                         Spacer(),
-                        if (!goalAchieved)
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Color(0xFFE3EDFF),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              "${hoursLeft}h ${minutesLeft}m to go",
-                              style: TextStyle(
-                                color: Color(0xFF2563EB),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
+                          if (!goalAchieved)
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Color(0xFFE3EDFF),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                "${hoursLeft}h ${minutesLeft}m to go",
+                                style: TextStyle(
+                                  color: Color(0xFF2563EB),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
                               ),
                             ),
+                          if (goalAchieved)
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFE6F9ED),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        if (goalAchieved)
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Color(0xFFE6F9ED),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              "Goal Achieved!",
-                              style: TextStyle(
-                                color: Color(0xFF1DBF73),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
+                          child: Text(
+                            "Goal Achieved!",
+                            style: TextStyle(
+                              color: Color(0xFF1DBF73),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
                             ),
                           ),
+                        ),
                       ],
                     ),
                     SizedBox(height: 10),
                     Row(
                       children: [
                         Text(
-                          "${hours}h ${minutes}m",
+                            "${hours}h ${minutes}m",
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.bold,
                             fontSize: 24,
@@ -432,9 +694,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
                         ),
                         Spacer(),
                         Text(
-                          "${(progress * 100).clamp(0, 100).toStringAsFixed(0)}%",
+                            "${(progress * 100).clamp(0, 100).toStringAsFixed(0)}%",
                           style: TextStyle(
-                            color: Color(0xFF2563EB),
+                              color: Color(0xFF2563EB),
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
@@ -453,35 +715,20 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text("0h", style: TextStyle(color: Colors.black38)),
-                        Text("Daily Goal: 8h 0m", style: TextStyle(color: Colors.black38)),
+                          // Text(
+                          //   isCurrentlyCheckedIn 
+                          //       ? "Session Active"
+                          //       : "Session Inactive",
+                          //   style: TextStyle(
+                          //     color: isCurrentlyCheckedIn 
+                          //         ? Color(0xFF5B6BFF)
+                          //         : Color(0xFFDC2626),
+                          //     fontWeight: FontWeight.w500,
+                          //   ),
+                          // ),
+                        // Text("Daily Goal: 8h 0m", style: TextStyle(color: Colors.black38)),
                       ],
                     ),
-                    SizedBox(height: 10),
-                    if (!goalAchieved)
-                      Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: Color(0xFFFFF9E5),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Text("💪", style: TextStyle(fontSize: 20)),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                "You're almost there! Keep it up.",
-                                style: TextStyle(
-                                  color: Color(0xFFB08800),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -491,12 +738,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => AttendanceScreen()),
-                    );
-                  },
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => AttendanceScreen()),
+                      );
+                    },
                   icon: Icon(Icons.insert_chart_outlined, color: Color(0xFF232B55)),
                   label: Text(
                     "Monthly Summary",
@@ -525,70 +772,117 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ),
               ),
               SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
+              if (isLoadingAttendance)
+                Center(child: CircularProgressIndicator())
+              else if (dailyAttendance == null || (dailyAttendance!['logs'] as List).isEmpty)
+                Center(child: Text("No attendance data available"))
+              else
+                Column(
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("In", style: TextStyle(color: Colors.black54)),
-                        SizedBox(height: 4),
-                        Text("9:00 AM", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    SizedBox(width: 24),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Out", style: TextStyle(color: Colors.black54)),
-                        SizedBox(height: 4),
-                        Text("12:30 PM", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    Spacer(),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFF3F4F6),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        "3h 30m",
-                        style: TextStyle(
-                          color: Color(0xFF232B55),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    ...List.generate(
+                      (dailyAttendance!['logs'] as List).length ~/ 2 + ((dailyAttendance!['logs'] as List).length % 2),
+                      (index) {
+                        final logs = dailyAttendance!['logs'] as List;
+                        final checkInIndex = index * 2;
+                        final checkOutIndex = checkInIndex + 1;
+                        
+                        // Calculate session duration
+                        Duration sessionDuration = Duration.zero;
+                        if (checkOutIndex < logs.length) {
+                          final checkIn = DateTime.parse(logs[checkInIndex]['timestamp']);
+                          final checkOut = DateTime.parse(logs[checkOutIndex]['timestamp']);
+                          sessionDuration = checkOut.difference(checkIn);
+                        } else if (checkInIndex < logs.length) {
+                          // If last log is check-in, calculate until now
+                          final checkIn = DateTime.parse(logs[checkInIndex]['timestamp']);
+                          sessionDuration = DateTime.now().difference(checkIn);
+                        }
+
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: 10),
+                          child: Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black12,
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text("In", style: TextStyle(color: Colors.black54)),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      _formatTime(logs[checkInIndex]['timestamp']),
+                                      style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(width: 24),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text("Out", style: TextStyle(color: Colors.black54)),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      checkOutIndex < logs.length
+                                          ? _formatTime(logs[checkOutIndex]['timestamp'])
+                                          : "--:--",
+                                      style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                                Spacer(),
+                                Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: checkOutIndex < logs.length
+                                        ? Color(0xFFF3F4F6)
+                                        : Color(0xFFE3EDFF),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (checkOutIndex >= logs.length)
+                                        Icon(Icons.access_time, size: 16, color: Color(0xFF2563EB)),
+                                      if (checkOutIndex >= logs.length)
+                                        SizedBox(width: 4),
+                                      Text(
+                                        _formatDuration(sessionDuration),
+                                        style: TextStyle(
+                                          color: checkOutIndex < logs.length
+                                              ? Color(0xFF232B55)
+                                              : Color(0xFF2563EB),
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
-              ),
               SizedBox(height: 24),
             ],
+            ),
           ),
         ),
       ),
     );
-  }
-
-  String _formatDuration(Duration d) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final hours = twoDigits(d.inHours);
-    final minutes = twoDigits(d.inMinutes.remainder(60));
-    final seconds = twoDigits(d.inSeconds.remainder(60));
-    return "$hours:$minutes:$seconds";
   }
 }
