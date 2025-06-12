@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'toast.dart';
+import 'home_dashboard.dart';
 
 
 class LoginScreen extends StatefulWidget {
@@ -57,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => EmployeeDashboard()),
+            MaterialPageRoute(builder: (context) => HomeDashboard()),
           );
         } else {
           _showError('Invalid login response: No token received');

@@ -686,27 +686,27 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                     ),
                   ],
                 ),
-                child: Padding(
+        child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
                       // Top Row: Greeting, Date, Profile
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
                             Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                                   Text(
                                     _getGreetingMessage(),
-                                    style: GoogleFonts.inter(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
+                              style: GoogleFonts.inter(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
                                       color: Colors.white,
                                     ),
                                   ),
@@ -714,36 +714,36 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                                     children: [
                                       Text(
                                         'Alex',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
+                              style: GoogleFonts.inter(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
                                           color: Colors.white,
                                           letterSpacing: 1.2,
-                                        ),
-                                      ),
+                              ),
+                            ),
                                       const SizedBox(width: 8),
                                       AnimatedSmiley(),
-                                    ],
-                                  ),
+                          ],
+                        ),
                                   const SizedBox(height: 4),
-                                  Text(
-                                    DateFormat('EEEE, d MMMM y').format(DateTime.now()),
+                      Text(
+                        DateFormat('EEEE, d MMMM y').format(DateTime.now()),
                                     style: GoogleFonts.inter(
                                       fontSize: 16,
                                       color: Colors.white70,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                        ),
+                      ),
+                    ],
+                  ),
                             ),
                             const SizedBox(width: 12),
-                            Row(
-                              children: [
-                                GestureDetector(
-                                  onTap: () {
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
                                     Navigator.push(context, MaterialPageRoute(builder: (context) => MyProfileScreen()));
-                                  },
-                                  child: Container(
+                        },
+                        child: Container(
                                     // decoration: BoxDecoration(
                                     //   shape: BoxShape.circle,
                                     //   border: Border.all(color: Colors.white, width: 3),
@@ -875,10 +875,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                       //     ),
                       //   ),
                       // ),
-                    ],
-                  ),
-                ),
-              ),
+                            ],
+                          ),
+                        ),
+                      ),
             ),
             // Sticky Company Selector (only for HR role)
             if (_selectedRole == 2)
@@ -900,7 +900,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
-                      onTap: () {
+                            onTap: () {
                         showModalBottomSheet(
                           context: context,
                           backgroundColor: Colors.transparent,
@@ -933,9 +933,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                                       fontWeight: FontWeight.w600,
                                       color: Colors.black87,
                                     ),
-                                  ),
-                                ],
-                              ),
+                      ),
+                    ],
+                  ),
                             ),
                             Icon(LucideIcons.chevronDown, color: const Color(0xFF04AF9E)),
                           ],
@@ -946,11 +946,11 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                 ),
               ),
             // Scrollable Content
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                     const SizedBox(height: 24),
                     // Main content for selected role
                     Builder(
@@ -980,7 +980,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: Column(
+                          child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
@@ -991,10 +991,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
               ),
             ),
             child: Row(
-              children: [
-                Text(
+                            children: [
+                              Text(
                   'Select Company',
-                  style: GoogleFonts.inter(
+                                style: GoogleFonts.inter(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1065,8 +1065,8 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Status Row
-                  Row(
-                    children: [
+                              Row(
+                                children: [
                       Container(
                         width: 22,
                         height: 22,
@@ -1081,29 +1081,29 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      Text(
+                                  Text(
                         checkedIn
                                 ? 'Checked in at \t	t${checkInTime!.hour}:${checkInTime!.minute.toString().padLeft(2, '0')}'
-                                : 'Not checked in yet',
-                            style: GoogleFonts.inter(
+                                        : 'Not checked in yet',
+                                    style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
                               color: Colors.black87,
-                            ),
-                          ),
-                    ],
-                  ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                   const SizedBox(height: 14),
                   // Check-In/Out Button
-                  SizedBox(
-                    width: double.infinity,
+                              SizedBox(
+                                width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: handleCheckInOut,
+                                  onPressed: handleCheckInOut,
                       icon: Icon(checkedIn ? Icons.logout : Icons.login, color: Colors.teal),
                       label: Text(
                         checkedIn ? 'Check Out' : 'Self Check-In',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: Colors.teal,
                         ),
@@ -1196,12 +1196,12 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                   ),
                   const SizedBox(height: 16),
                   Row(
-                    children: [
+                                children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () {
-                            showTeamInPopup(context, users.map((user) => {'name': user['name'] as String, 'employeeId': user['employeeId'] as String}).toList());
-                          },
+                                    onPressed: () {
+                                      showTeamInPopup(context, users.map((user) => {'name': user['name'] as String, 'employeeId': user['employeeId'] as String}).toList());
+                                    },
                           icon: Icon(Icons.people, color: accent, size: 20),
                           label: Text('Team In', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: accent)),
                           style: OutlinedButton.styleFrom(
@@ -1214,9 +1214,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () {
-                            showTeamOutPopup(context, ['Alice', 'Bob', 'Charlie', 'David', 'Eve']);
-                          },
+                                    onPressed: () {
+                                      showTeamOutPopup(context, ['Alice', 'Bob', 'Charlie', 'David', 'Eve']);
+                                    },
                           icon: Icon(Icons.exit_to_app, color: Colors.red, size: 20),
                           label: Text('Team Out', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.red)),
                           style: OutlinedButton.styleFrom(
@@ -1224,18 +1224,18 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
         ),
         const SizedBox(height: 32),
         // Open Requests with new design
-        Padding(
+                      Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Container(
             width: double.infinity,
@@ -1277,12 +1277,12 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                           children: [
                             Text(
                               'Open Requests',
-                              style: GoogleFonts.inter(
+                  style: GoogleFonts.inter(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
-                            ),
+                    color: Colors.black87,
+                  ),
+                ),
                             const SizedBox(height: 4),
                             Text(
                               '3 pending approvals',
@@ -1291,9 +1291,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                                 color: Colors.black54,
                               ),
                             ),
-                          ],
-                        ),
-                      ),
+                    ],
+                  ),
+                ),
                       Container(
                         padding: EdgeInsets.all(8),
                         decoration: BoxDecoration(
@@ -1305,11 +1305,11 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                           ),
                         ),
                         child: Icon(Icons.arrow_forward_ios, color: Colors.red, size: 16),
-                      ),
-                    ],
-                  ),
-                ),
               ),
+            ],
+          ),
+        ),
+      ),
             ),
           ),
         ),
@@ -1363,9 +1363,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
             ),
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Column(
+      child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+        children: [
                   Text(
                     'HR Overview',
                     style: GoogleFonts.inter(
@@ -1395,8 +1395,8 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
+          ),
+          const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
@@ -1415,9 +1415,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                           LucideIcons.clock,
                           const Color(0xFF04AF9E),
                         ),
-                      ),
-                    ],
-                  ),
+          ),
+        ],
+      ),
                 ],
               ),
             ),
@@ -1445,12 +1445,12 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                 },
                 borderRadius: BorderRadius.circular(24),
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
                   child: Row(
                     children: [
                       Container(
                         padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
+      decoration: BoxDecoration(
                           color: Colors.red.withOpacity(0.1),
                           shape: BoxShape.circle,
                           border: Border.all(
@@ -1462,10 +1462,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                       ),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+              Text(
                               'Open Requests',
                               style: GoogleFonts.inter(
                                 fontSize: 16,
@@ -1480,9 +1480,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                                 fontSize: 14,
                                 color: Colors.black54,
                               ),
-                            ),
-                          ],
-                        ),
+              ),
+            ],
+          ),
                       ),
                       Container(
                         padding: EdgeInsets.all(8),
@@ -1569,15 +1569,15 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                   title,
                   style: GoogleFonts.inter(
                     fontSize: 13,
-                    color: Colors.black54,
+              color: Colors.black54,
                   ),
                   overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+            ),
           ),
+        ],
+      ),
           const SizedBox(height: 6),
-          Text(
+              Text(
             value,
             style: GoogleFonts.inter(
               fontSize: 22,
