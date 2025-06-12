@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:medhir/leave-management.dart';
-import 'package:medhir/payroll.dart';
-import 'attendance.dart';
-import 'login_screen.dart';
-import 'myprofile.dart';
+// import 'package:medhir/leave-management.dart';
+// import 'package:medhir/payroll.dart';
+// import 'attendance.dart';
+// import 'login_screen.dart';
+// import 'myprofile.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:medhir/check-in.dart';
 import 'package:http/http.dart' as http;
@@ -741,7 +741,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                     children: [
                       GestureDetector(
                         onTap: () {
-                                    Navigator.push(context, MaterialPageRoute(builder: (context) => MyProfileScreen()));
+                                    // Navigator.push(context, MaterialPageRoute(builder: (context) => MyProfileScreen()));
                         },
                         child: Container(
                                     // decoration: BoxDecoration(
@@ -764,11 +764,11 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                                 const SizedBox(width: 12),
                                 IconButton(
                                   onPressed: () {
-                                    Navigator.pushAndRemoveUntil(
-                                      context,
-                                      MaterialPageRoute(builder: (context) => LoginScreen()),
-                                      (route) => false,
-                                    );
+                                    // Navigator.pushAndRemoveUntil(
+                                    //   context,
+                                    //   MaterialPageRoute(builder: (context) => LoginScreen()),
+                                    //   (route) => false,
+                                    // );
                                   },
                                   icon: Icon(Icons.logout, color: Colors.white, size: 28),
                                 ),
@@ -1325,7 +1325,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
             'label': 'Attendance',
             'icon': LucideIcons.clock,
             'color': Colors.purple,
-            'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => AttendanceScreen())),
+            // 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => AttendanceScreen())),
           },
           {
             'label': 'Leads',
@@ -1515,13 +1515,13 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
             'label': 'Attendance',
             'icon': LucideIcons.clock,
             'color': Colors.purple,
-            'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => AttendanceScreen())),
+            // 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => AttendanceScreen())),
           },
           {
             'label': 'Payroll',
             'icon': LucideIcons.creditCard,
             'color': Colors.orange,
-            'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => SalaryPayrollPage())),
+            // 'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (context) => SalaryPayrollPage())),
           },
           {
             'label': 'Settings',

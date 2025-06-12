@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'home_page.dart';
-import 'toast.dart';
+// import 'toast.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -48,7 +48,7 @@ class _LoginPageState extends State<LoginPage> {
           await prefs.setString('authToken', data['token']);
 
           // Show Custom Toast
-          ToastHelper.showCustomToast(context);
+          // ToastHelper.showCustomToast(context);
 
           Navigator.pushReplacement(
             context,

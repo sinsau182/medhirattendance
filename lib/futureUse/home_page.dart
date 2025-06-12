@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'login_page.dart';
-import 'check-in.dart';
-import 'register.dart';
-import 'view_attendance.dart';
+// import 'check_in.dart';
+// import 'register.dart';
+// import 'view_attendance.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -200,14 +200,14 @@ class _HomePageState extends State<HomePage> {
                     label: "Quick Check-In",
                     color: Colors.teal,
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => CheckInScreen(
-                            onCheckInSuccess: fetchCheckInsToday, // Pass function
-                          ),
-                        ),
-                      );
+                      // Navigator.push(
+                      //   context,
+                      //   MaterialPageRoute(
+                      //     builder: (context) => CheckInScreen(
+                      //       onCheckInSuccess: fetchCheckInsToday, // Pass function
+                      //     ),
+                      //   ),
+                      // );
 
                     },
                   ),
@@ -219,10 +219,10 @@ class _HomePageState extends State<HomePage> {
                     label: "Register User",
                     color: Colors.teal,
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => RegisterUserScreen()),
-                      );
+                      // Navigator.push(
+                      //   context,
+                      //   MaterialPageRoute(builder: (context) => RegisterUserScreen()),
+                      // );
                     },
                   ),
                 ),
@@ -251,10 +251,10 @@ class _HomePageState extends State<HomePage> {
                   Expanded(
                     child: TextButton(
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => ViewAttendanceScreen()),
-                        );
+                        // Navigator.push(
+                        //   context,
+                        //   MaterialPageRoute(builder: (context) => ViewAttendanceScreen()),
+                        // );
                       },
                       child: const Text(
                         'View Attendance',
