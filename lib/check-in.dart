@@ -7,6 +7,7 @@ import 'package:image/image.dart' as img;
 import 'dart:typed_data';
 import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'attendance_popup.dart';
 import 'dropdown.dart';
 import 'home_dashboard.dart';
@@ -31,13 +32,22 @@ class _CheckInScreenState extends State<CheckInScreen> {
   List<String> users = [];
   String? selectedUser;
   String? _capturedImagePath;
+  bool _isConfirming = false;
+  bool _isNotRecognized = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _initializeCamera();
-    // _fetchUsers();
-    selectedUser = 'emp001';
+    _loadEmployeeId();
+  }
+
+  Future<void> _loadEmployeeId() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      selectedUser = prefs.getString('employeeId') ?? 'emp001';
+    });
   }
 
   void _initializeCamera({int? cameraIndex}) async {
@@ -123,6 +133,80 @@ class _CheckInScreenState extends State<CheckInScreen> {
 
         setState(() {
           _capturedImagePath = imageFile.path;
+          _isConfirming = true; // Set to confirmation mode
+        });
+      }
+    }
+  }
+
+  void _retryCapture() {
+    setState(() {
+      _capturedImagePath = null;
+      _isConfirming = false;
+      _isNotRecognized = false;
+    });
+  }
+
+  Future<void> _handleManualMark() async {
+    if (_capturedImagePath == null || selectedUser == null) {
+      _showErrorSnackbar(context, "Please capture an image first.");
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://192.168.0.200:8082/attendance/manual-checkin'),
+      );
+
+      request.fields['empId'] = selectedUser!;
+
+      String? mimeType = lookupMimeType(_capturedImagePath!) ?? 'image/jpeg';
+      var mediaType = MediaType.parse(mimeType);
+
+      request.files.add(await http.MultipartFile.fromPath(
+        'file',
+        _capturedImagePath!,
+        contentType: mediaType,
+      ));
+
+      var response = await request.send();
+      var responseBody = await response.stream.bytesToString();
+      print('Manual Check-in Response: $responseBody');
+
+      if (response.statusCode == 200) {
+        if (context.mounted) {
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Attendance marked successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          
+          // Navigate to HomeDashboard
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => HomeDashboard()),
+            (route) => false,
+          );
+        }
+      } else {
+        if (context.mounted) {
+          _showErrorSnackbar(context, "Failed to mark attendance manually: $responseBody");
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        _showErrorSnackbar(context, "Error: $e");
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
         });
       }
     }
@@ -138,7 +222,6 @@ class _CheckInScreenState extends State<CheckInScreen> {
 
         request.fields['employeeId'] = selectedUser!;
 
-        // Determine MIME type
         String? mimeType = lookupMimeType(_capturedImagePath!) ?? 'image/jpeg';
         var mediaType = MediaType.parse(mimeType);
 
@@ -148,7 +231,6 @@ class _CheckInScreenState extends State<CheckInScreen> {
           contentType: mediaType,
         ));
 
-        // Send request
         var response = await request.send();
         var responseBody = await response.stream.bytesToString();
         print('Response: $responseBody');
@@ -156,6 +238,15 @@ class _CheckInScreenState extends State<CheckInScreen> {
         if (response.statusCode == 200) {
           try {
             final decoded = json.decode(responseBody);
+            
+            // Handle not recognized case
+            if (decoded is Map && decoded['status'] == 'not found') {
+              setState(() {
+                _isNotRecognized = true;
+              });
+              return;
+            }
+
             if (decoded is Map && decoded['message'] == 'Attendance marked successfully') {
               if (context.mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
@@ -183,26 +274,24 @@ class _CheckInScreenState extends State<CheckInScreen> {
           } catch (_) {}
 
           if (responseBody.contains('Present')) {
-            showAttendancePopup(context, true, () async {}, () {}, selectedUser!); // Show success popup
-
-            widget.onCheckInSuccess?.call(); // Call fetchCheckInsToday
-
+            showAttendancePopup(context, true, () async {}, () {}, selectedUser!);
+            widget.onCheckInSuccess?.call();
             Future.delayed(Duration(seconds: 1), () {
               Navigator.pop(context);
-              Navigator.pop(context, true); // Close popup after 1 second
+              Navigator.pop(context, true);
             });
           } else if (responseBody.contains('Absent')) {
             showAttendancePopup(
               context,
               false,
-                  () async {
-                    Navigator.pop(context);
-                    Navigator.pop(context, false);// Close popup first
+              () async {
+                Navigator.pop(context);
+                Navigator.pop(context, false);
               },
-                  () {
-                showAttendancePopup(context, false, () async {}, () {}, selectedUser!); // Manual mark
+              () {
+                showAttendancePopup(context, false, () async {}, () {}, selectedUser!);
               },
-              selectedUser!, // Pass prefilled user
+              selectedUser!,
             );
           }
         } else {
@@ -222,13 +311,6 @@ class _CheckInScreenState extends State<CheckInScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
-  }
-
-  void _onCaptureButtonPressed() async {
-    await _capturePhoto();
-    if (context.mounted) {
-      _submitData(context);
-    }
   }
 
   @override
@@ -251,96 +333,179 @@ class _CheckInScreenState extends State<CheckInScreen> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Position Your Face in the Frame",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
                     ),
-                    SizedBox(height: 6),
-                    Stack(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Container(
-                          height: 440,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            color: Colors.teal.shade800,
-                          ),
-                          child: FutureBuilder<void>(
-                            future: _initializeCameraController,
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState == ConnectionState.done) {
-                                return ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: CameraPreview(_cameraController),
-                                );
-                              } else {
-                                return Center(child: CircularProgressIndicator());
-                              }
-                            },
-                          ),
+                        Text(
+                          "Position Your Face in the Frame",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
-                        if (_capturedImagePath != null)
-                          Positioned.fill(
-                            child: Opacity(
-                              opacity: 1,
-                              child: Image.file(
-                                File(_capturedImagePath!),
-                                fit: BoxFit.cover,
+                        SizedBox(height: 6),
+                        Stack(
+                          children: [
+                            Container(
+                              height: 440,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                color: Colors.teal.shade800,
+                              ),
+                              child: FutureBuilder<void>(
+                                future: _initializeCameraController,
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState == ConnectionState.done) {
+                                    return ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: CameraPreview(_cameraController),
+                                    );
+                                  } else {
+                                    return Center(child: CircularProgressIndicator());
+                                  }
+                                },
                               ),
                             ),
+                            if (_capturedImagePath != null)
+                              Positioned.fill(
+                                child: Opacity(
+                                  opacity: 1,
+                                  child: Image.file(
+                                    File(_capturedImagePath!),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        SizedBox(height: 16),
+                        if (!_isConfirming) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.switch_camera, color: Colors.teal),
+                                onPressed: _switchCamera,
+                              ),
+                              IconButton(
+                                icon: Icon(isFlashOn ? Icons.flash_on : Icons.flash_off, color: Colors.teal),
+                                onPressed: _toggleFlash,
+                              ),
+                            ],
                           ),
+                          SizedBox(height: 16),
+                          Center(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.teal,
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(horizontal: 120, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: selectedUser == null ? null : _capturePhoto,
+                              child: Text("Capture", style: TextStyle(fontSize: 16)),
+                            ),
+                          ),
+                        ] else ...[
+                          if (_isNotRecognized) ...[
+                            Container(
+                              padding: EdgeInsets.all(12),
+                              margin: EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.warning_amber_rounded, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      "Face not recognized. Please try again or mark manually.",
+                                      style: TextStyle(color: Colors.red.shade900),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.grey[300],
+                                      foregroundColor: Colors.black87,
+                                      padding: EdgeInsets.symmetric(vertical: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: _isLoading ? null : _retryCapture,
+                                    child: Text("Retry", style: TextStyle(fontSize: 16)),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _isNotRecognized ? Colors.orange : Colors.teal,
+                                      foregroundColor: Colors.white,
+                                      padding: EdgeInsets.symmetric(vertical: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: _isLoading ? null : (_isNotRecognized ? _handleManualMark : () => _submitData(context)),
+                                    child: _isLoading
+                                        ? SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                            ),
+                                          )
+                                        : Text(
+                                            _isNotRecognized ? "Mark Manually" : "Send",
+                                            style: TextStyle(fontSize: 16),
+                                          ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
-                    SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.switch_camera, color: Colors.teal),
-                          onPressed: _switchCamera,
-                        ),
-                        IconButton(
-                          icon: Icon(isFlashOn ? Icons.flash_on : Icons.flash_off, color: Colors.teal),
-                          onPressed: _toggleFlash,
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 16),
-                    Center(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.teal,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(horizontal: 120, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: selectedUser == null ? null : _onCaptureButtonPressed,
-                        child: Text("Capture", style: TextStyle(fontSize: 16)),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+          if (_isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.3),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
       ),
-
     );
   }
 }

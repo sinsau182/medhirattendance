@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'toast.dart';
 import 'home_dashboard.dart';
+import 'register.dart';
 
 
 class LoginScreen extends StatefulWidget {
@@ -52,14 +53,38 @@ class _LoginScreenState extends State<LoginScreen> {
         if (data['token'] != null) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('authToken', data['token']);
+          await prefs.setString('employeeId', data['employeeId']);
+
+          // Decode JWT and save employeeName
+          final token = data['token'];
+          final parts = token.split('.');
+          if (parts.length == 3) {
+            final payload = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+            final payloadMap = json.decode(payload);
+            final name = payloadMap['name'] ?? '';
+            await prefs.setString('employeeName', name);
+          }
 
           // Show Custom Toast
           ToastHelper.showCustomToast(context);
 
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => HomeDashboard()),
-          );
+          // Check if employee is registered
+          final empId = prefs.getString('employeeId') ?? '';
+          final checkUrl = 'http://192.168.0.200:8082/attendance/registered-users/$empId';
+          final checkResponse = await http.get(Uri.parse(checkUrl));
+          final checkData = json.decode(checkResponse.body);
+
+          if (checkData['status'] == true) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => HomeDashboard()),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => RegisterUserScreen()),
+            );
+          }
         } else {
           _showError('Invalid login response: No token received');
         }

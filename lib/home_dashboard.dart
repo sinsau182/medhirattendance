@@ -30,11 +30,14 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
   final int dailyGoalSeconds = 8 * 60 * 60; // 8 hours
 
+  String? employeeId;
+
   @override
   void initState() {
     super.initState();
     _loadEmployeeName();
     _loadDailyAttendance();
+    _loadEmployeeId();
     _now = DateTime.now();
     
     // Timer for current time only
@@ -63,6 +66,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
   Future<void> _loadEmployeeName() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('authToken');
+    final employeeId = prefs.getString('employeeId');
     if (token != null) {
       Map<String, dynamic> payload = Jwt.parseJwt(token);
       setState(() {
@@ -81,12 +85,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('authToken');
+      final employeeId = prefs.getString('employeeId');
       if (token == null) return;
 
       final today = DateFormat('yyyy-MM-dd').format(_now);
 
       final response = await http.get(
-        Uri.parse('http://192.168.0.200:8082/attendance/daily/MED102/$today'),
+        Uri.parse('http://192.168.0.200:8082/attendance/daily/$employeeId/$today'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -116,7 +121,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
         setState(() {
           dailyAttendance = {
             'logs': [],
-            'employeeId': 'MED102',
+            'employeeId': employeeId,
             'date': today,
           };
         });
@@ -125,7 +130,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
       setState(() {
         dailyAttendance = {
           'logs': [],
-          'employeeId': 'MED102',
+          'employeeId': employeeId,
           'date': DateFormat('yyyy-MM-dd').format(_now),
         };
       });
@@ -145,11 +150,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('authToken');
+      final employeeId = prefs.getString('employeeId');
       if (token == null) return;
 
       var uri = Uri.parse('http://192.168.0.200:8082/attendance/checkout');
       var request = http.MultipartRequest('POST', uri);
-      request.fields['employeeId'] = 'MED102';
+      request.fields['employeeId'] = employeeId!;
       request.headers['Authorization'] = 'Bearer $token';
 
       var response = await request.send();
@@ -230,6 +236,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     return "${hours}h ${minutes}m";
+  }
+
+  Future<void> _loadEmployeeId() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      employeeId = prefs.getString('employeeId');
+    });
   }
 
   @override

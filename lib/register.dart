@@ -5,6 +5,9 @@ import 'dart:io';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
 import 'package:http_parser/http_parser.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
+import 'home_dashboard.dart';
 
 class RegisterUserScreen extends StatefulWidget {
   const RegisterUserScreen({super.key});
@@ -17,36 +20,47 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
   late List<CameraDescription> _cameras;
   late CameraController _cameraController;
   late Future<void> _initializeCameraController;
-  final TextEditingController _nameController = TextEditingController();
-  bool _isPhotoCaptured = false;
-  bool _isNameEntered = false;
   String? _capturedImagePath;
   int _selectedCameraIndex = 0;
   bool _isFlashOn = false;
+  bool _isPhotoConfirming = false;
+  bool _isLoading = false;
+  bool _showCamera = false;
+  String? _empId;
+  String? _empName;
 
   @override
   void initState() {
     super.initState();
-    _initializeCamera();
+    _loadEmpData();
+    // Set status bar to dark icons for visibility
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark.copyWith(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+    ));
   }
 
-  void _initializeCamera({int? cameraIndex}) async {
-    _cameras = await availableCameras();
+  Future<void> _loadEmpData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _empId = prefs.getString('employeeId') ?? 'MED102';
+      _empName = prefs.getString('employeeName') ?? 'ankit';
+    });
+  }
 
-    // Default to front camera
+  Future<void> _initializeCamera({int? cameraIndex}) async {
+    _cameras = await availableCameras();
     _selectedCameraIndex = cameraIndex ??
         _cameras.indexWhere((camera) => camera.lensDirection == CameraLensDirection.front);
-
     if (_selectedCameraIndex == -1) {
-      _selectedCameraIndex = 0; // Fallback to first camera if front is unavailable
+      _selectedCameraIndex = 0;
     }
-
     _cameraController = CameraController(
       _cameras[_selectedCameraIndex],
-      ResolutionPreset.medium,
+      ResolutionPreset.high,
       enableAudio: false,
     );
-
     _initializeCameraController = _cameraController.initialize();
     if (mounted) setState(() {});
   }
@@ -69,7 +83,6 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
   @override
   void dispose() {
     _cameraController.dispose();
-    _nameController.dispose();
     super.dispose();
   }
 
@@ -77,190 +90,289 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
     if (_cameraController.value.isInitialized) {
       final XFile file = await _cameraController.takePicture();
       File imageFile = File(file.path);
-
       Uint8List imageBytes = await imageFile.readAsBytes();
       img.Image? image = img.decodeImage(imageBytes);
-
       if (image != null) {
-        // Flip image horizontally if using front camera
         img.Image processedImage = _cameras[_selectedCameraIndex].lensDirection == CameraLensDirection.front
             ? img.flipHorizontal(image)
             : image;
-
         await imageFile.writeAsBytes(img.encodeJpg(processedImage));
-
         setState(() {
           _capturedImagePath = imageFile.path;
-          _isPhotoCaptured = true;
+          _isPhotoConfirming = true;
         });
       }
     }
   }
 
-  Future<void> _submitData() async {
-    if (_capturedImagePath != null && _nameController.text.isNotEmpty) {
+  void _retryPhoto() {
+    setState(() {
+      _capturedImagePath = null;
+      _isPhotoConfirming = false;
+      _showCamera = false;
+    });
+  }
+
+  Future<void> _submitRegistration() async {
+    if (_capturedImagePath == null || _empId == null || _empName == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Missing photo or employee data!')),
+      );
+      return;
+    }
+    setState(() { _isLoading = true; });
+    try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.0.200:8082/api/users/register'),
+        Uri.parse('http://192.168.0.200:8082/attendance/register'),
       );
-
-      request.fields['name'] = _nameController.text;
+      request.fields['empId'] = _empId!;
+      request.fields['empName'] = _empName!;
       request.files.add(await http.MultipartFile.fromPath(
-        'file',
+        'empImage',
         _capturedImagePath!,
         contentType: MediaType('image', 'jpeg'),
       ));
-
       var response = await request.send();
       var responseBody = await response.stream.bytesToString();
-      print('Response: $responseBody');
-
+      print('Register Response: $responseBody');
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Data submitted successfully!')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Registration Completed!'), backgroundColor: Colors.blueAccent),
+        );
+        await Future.delayed(Duration(seconds: 1));
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => HomeDashboard()),
+            (route) => false,
+          );
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to submit data: $responseBody')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $responseBody'), backgroundColor: Colors.redAccent),
+        );
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+      );
+    } finally {
+      setState(() { _isLoading = false; });
     }
-  }
-
-  void _onNameSubmitted() {
-    setState(() {
-      _isNameEntered = true;
-    });
-    _submitData();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.teal.shade50,
-      appBar: AppBar(
-        backgroundColor: Colors.teal.shade50,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          "Register New User",
-          style: TextStyle(
-            color: Colors.teal.shade900,
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-          ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      _isPhotoCaptured ? "Enter User Details" : "Capture User Image",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 12),
-                    if (_isPhotoCaptured) ...[
-                      Container(
-                        height: 430,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          color: Colors.grey.shade300,
-                        ),
-                        child: _capturedImagePath != null
-                            ? Image.file(
-                          File(_capturedImagePath!),
-                          fit: BoxFit.cover,
-                        )
-                            : Center(child: CircularProgressIndicator()),
-                      ),
-                      SizedBox(height: 20),
-                      TextField(
-                        controller: _nameController,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(),
-                          hintText: "Enter full name",
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.teal,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: _onNameSubmitted,
-                        child: Text("Submit", style: TextStyle(fontSize: 16)),
-                      ),
-                    ] else ...[
-                      Stack(
-                        children: [
-                          FutureBuilder<void>(
-                            future: _initializeCameraController,
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState == ConnectionState.done) {
-                                return ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: CameraPreview(_cameraController),
-                                );
-                              } else {
-                                return Center(child: CircularProgressIndicator());
-                              }
-                            },
-                          ),
-                          Positioned(
-                            top: 10,
-                            right: 10,
-                            child: IconButton(
-                              icon: Icon(Icons.switch_camera, color: Colors.white, size: 30),
-                              onPressed: _switchCamera,
-                            ),
-                          ),
-                          if (_cameras[_selectedCameraIndex].lensDirection == CameraLensDirection.back)
-                            Positioned(
-                              top: 10,
-                              left: 10,
-                              child: IconButton(
-                                icon: Icon(
-                                  _isFlashOn ? Icons.flash_on : Icons.flash_off,
-                                  color: Colors.white,
-                                  size: 30,
-                                ),
-                                onPressed: _toggleFlash,
-                              ),
-                            ),
-                        ],
-                      ),
-                      SizedBox(height: 20),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.teal,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: _capturePhoto,
-                        icon: Icon(Icons.camera_alt),
-                        label: Text("Capture Photo", style: TextStyle(fontSize: 16)),
-                      ),
-                    ],
-                  ],
+    final double cameraFrameWidth = MediaQuery.of(context).size.width * 0.85;
+    final double cameraFrameHeight = cameraFrameWidth * 4 / 3; // 4:3 aspect ratio
+    final double buttonWidth = MediaQuery.of(context).size.width * 0.7;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFE3F0FF), Color(0xFFB6D8FF)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
               ),
-            ],
-          ),
+            ),
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      SizedBox(height: 36),
+                      // Title
+                      Center(
+                        child: Text(
+                          "Complete Your Profile",
+                          style: TextStyle(
+                            color: Colors.blue[900],
+                            fontWeight: FontWeight.bold,
+                            fontSize: 24,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      // Subtitle
+                      Center(
+                        child: Text(
+                          "Take your selfie to get started",
+                          style: TextStyle(fontSize: 15, color: Colors.blue[700]),
+                        ),
+                      ),
+                      SizedBox(height: 30),
+                      // Show Add Photo button or Camera
+                      if (!_showCamera && !_isPhotoConfirming) ...[
+                        Center(
+                          child: SizedBox(
+                            width: buttonWidth,
+                            height: 56,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blueAccent,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                                textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                              ),
+                              onPressed: () async {
+                                setState(() { _showCamera = true; });
+                                await _initializeCamera();
+                              },
+                              icon: Icon(Icons.add_a_photo, size: 32),
+                              label: Text("Add Your Photo"),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                      ] else if (_showCamera && !_isPhotoConfirming) ...[
+                        Stack(
+                          children: [
+                            Container(
+                              width: cameraFrameWidth,
+                              height: cameraFrameHeight,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(22),
+                                color: Colors.blue[50],
+                              ),
+                              child: FutureBuilder<void>(
+                                future: _initializeCameraController,
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState == ConnectionState.done) {
+                                    return ClipRRect(
+                                      borderRadius: BorderRadius.circular(22),
+                                      child: CameraPreview(_cameraController),
+                                    );
+                                  } else {
+                                    return Center(child: CircularProgressIndicator());
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (_cameras.isNotEmpty && _cameras[_selectedCameraIndex].lensDirection == CameraLensDirection.back)
+                              IconButton(
+                                icon: Icon(_isFlashOn ? Icons.flash_on : Icons.flash_off, color: Colors.blue[200], size: 28),
+                                onPressed: _toggleFlash,
+                              ),
+                            IconButton(
+                              icon: Icon(Icons.switch_camera, color: Colors.blue[200], size: 28),
+                              onPressed: _switchCamera,
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 22),
+                        Center(
+                          child: SizedBox(
+                            width: buttonWidth,
+                            height: 50,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blueAccent,
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                textStyle: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                              ),
+                              onPressed: _capturePhoto,
+                              icon: Icon(Icons.camera_alt_rounded, size: 24),
+                              label: Text("Take Selfie"),
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        Container(
+                          width: cameraFrameWidth,
+                          height: cameraFrameHeight,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(22),
+                            color: Colors.blue[50],
+                          ),
+                          child: _capturedImagePath != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(22),
+                                  child: Image.file(
+                                    File(_capturedImagePath!),
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Center(child: CircularProgressIndicator()),
+                        ),
+                        SizedBox(height: 22),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                              child: SizedBox(
+                                width: 110,
+                                height: 40,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue[100],
+                                    foregroundColor: Colors.blue[900],
+                                    padding: EdgeInsets.symmetric(vertical: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  onPressed: _isLoading ? null : _retryPhoto,
+                                  child: Text("Retry", style: TextStyle(fontSize: 15)),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                              child: SizedBox(
+                                width: 110,
+                                height: 40,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blueAccent,
+                                    foregroundColor: Colors.white,
+                                    padding: EdgeInsets.symmetric(vertical: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  onPressed: _isLoading ? null : _submitRegistration,
+                                  child: _isLoading
+                                      ? SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        )
+                                      : Text("Register", style: TextStyle(fontSize: 15)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (_isLoading)
+              Container(
+                color: Colors.black.withOpacity(0.3),
+                child: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+          ],
         ),
       ),
     );
