@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'toast.dart';
 import 'home_dashboard.dart';
 import 'register.dart';
+import 'manager_screen.dart';
 
 
 class LoginScreen extends StatefulWidget {
@@ -55,14 +56,16 @@ class _LoginScreenState extends State<LoginScreen> {
           await prefs.setString('authToken', data['token']);
           await prefs.setString('employeeId', data['employeeId']);
 
-          // Decode JWT and save employeeName
-          final token = data['token'];
-          final parts = token.split('.');
-          if (parts.length == 3) {
-            final payload = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
-            final payloadMap = json.decode(payload);
-            final name = payloadMap['name'] ?? '';
-            await prefs.setString('employeeName', name);
+          // Save roles from response (case-insensitive)
+          List roles = [];
+          if (data['roles'] != null && data['roles'] is List) {
+            roles = (data['roles'] as List).map((r) => r.toString().toUpperCase()).toList();
+            await prefs.setString('roles', json.encode(roles));
+          }
+
+          // Save employeeName if present
+          if (data['name'] != null) {
+            await prefs.setString('employeeName', data['name']);
           }
 
           // Show Custom Toast
@@ -75,10 +78,20 @@ class _LoginScreenState extends State<LoginScreen> {
           final checkData = json.decode(checkResponse.body);
 
           if (checkData['status'] == true) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => HomeDashboard()),
-            );
+            // Registration complete, now check roles
+            if (roles.contains('MANAGER')) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => ManagerScreen()),
+              );
+            } else if (roles.contains('EMPLOYEE')) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => HomeDashboard()),
+              );
+            } else {
+              _showError('No valid role found.');
+            }
           } else {
             Navigator.pushReplacement(
               context,
@@ -129,140 +142,57 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF1A237E), Color(0xFF3949AB)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Center(
-          child: AnimatedContainer(
-            duration: Duration(milliseconds: 500),
-            curve: Curves.easeOut,
-            padding: EdgeInsets.all(24),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Container(
-                  width: 350,
-                  padding: EdgeInsets.symmetric(vertical: 36, horizontal: 28),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 24,
-                        offset: Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        "Hi, Welcome Back!",
-                        style: GoogleFonts.poppins(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      SizedBox(height: 32),
-                      TextField(
-                        controller: emailController,
-                        style: TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.email_outlined, color: Colors.white70),
-                          hintText: "Email",
-                          hintStyle: TextStyle(color: Colors.white54),
-                          filled: true,
-                          fillColor: Color(0xFF3B4270).withOpacity(0.45),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      SizedBox(height: 18),
-                      TextField(
-                        controller: passwordController,
-                        obscureText: _obscurePassword,
-                        style: TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.lock_outline, color: Colors.white70),
-                          hintText: "Password",
-                          hintStyle: TextStyle(color: Colors.white54),
-                          filled: true,
-                          fillColor: Color(0xFF3B4270).withOpacity(0.45),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                              color: Colors.white54,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
-                            },
-                          ),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () {
-                            // TODO: Implement forgot password
-                          },
-                          child: Text(
-                            "Forgot password?",
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: isFilled ? _login : null,
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            backgroundColor: isFilled
-                                ? Color(0xFF232B55)
-                                : Colors.white24,
-                            elevation: 0,
-                          ),
-                          child: Text(
-                            "Login",
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Colors.white,
-                              letterSpacing: 1.1,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+      backgroundColor: Color(0xFFF5F6FA),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Login', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87)),
+              SizedBox(height: 32),
+              TextField(
+                controller: emailController,
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              SizedBox(height: 18),
+              TextField(
+                controller: passwordController,
+                obscureText: _obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
+                    },
                   ),
                 ),
               ),
-            ),
+              SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF4F8CFF),
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: isFilled ? _login : null,
+                  child: Text('Login', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
           ),
         ),
       ),
