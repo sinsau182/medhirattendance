@@ -3,6 +3,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'home_dashboard.dart';
 
 class ManagerScreen extends StatefulWidget {
   const ManagerScreen({Key? key}) : super(key: key);
@@ -27,16 +30,28 @@ class _ManagerScreenState extends State<ManagerScreen> {
   static const Color kPrimaryBlue = Color(0xFF4F8CFF);
   static const Color kLightBlue = Color(0xFFF5F6FA);
 
+  // --- Bottom NavBar logic ---
+  Future<bool> isManager() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rolesString = prefs.getString('roles');
+    if (rolesString != null) {
+      final roles = List<String>.from(json.decode(rolesString));
+      return roles.contains('MANAGER');
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
-        statusBarColor: Colors.transparent,
+        statusBarColor: kLightBlue,
         statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: kLightBlue,
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: kLightBlue,
         body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,30 +166,40 @@ class _ManagerScreenState extends State<ManagerScreen> {
             ],
           ),
         ),
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: _selectedNavIndex,
-          onTap: (index) {
-            if (index == 0) {
-              Navigator.pushReplacementNamed(context, '/home_dashboard');
-            } else {
-              setState(() {
-                _selectedNavIndex = index;
-              });
+        // Show bottom nav only if manager
+        bottomNavigationBar: FutureBuilder<bool>(
+          future: isManager(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done || !snapshot.hasData || !snapshot.data!) {
+              return SizedBox.shrink();
             }
+            return BottomNavigationBar(
+              currentIndex: 1, // Team
+              onTap: (index) {
+                if (index == 0) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => HomeDashboard()),
+                  );
+                } else if (index == 1) {
+                  // Already on ManagerScreen
+                }
+              },
+              backgroundColor: Colors.white,
+              selectedItemColor: kPrimaryBlue,
+              unselectedItemColor: Colors.grey[400],
+              items: [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.person_outline),
+                  label: 'Personal',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.groups),
+                  label: 'Team',
+                ),
+              ],
+            );
           },
-          backgroundColor: Colors.white,
-          selectedItemColor: kPrimaryBlue,
-          unselectedItemColor: Colors.grey[400],
-          items: [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              label: 'Personal',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.groups),
-              label: 'Team',
-            ),
-          ],
         ),
       ),
     );
@@ -298,7 +323,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
   }
 }
 
-// Camera popup/screen placeholder
+// Camera popup/screen
 class CameraPopupScreen extends StatefulWidget {
   @override
   State<CameraPopupScreen> createState() => _CameraPopupScreenState();

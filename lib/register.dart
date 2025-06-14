@@ -8,9 +8,11 @@ import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'home_dashboard.dart';
+import 'manager_screen.dart';
 
 class RegisterUserScreen extends StatefulWidget {
-  const RegisterUserScreen({super.key});
+  final List roles;
+  const RegisterUserScreen({Key? key, required this.roles}) : super(key: key);
 
   @override
   _RegisterUserScreenState createState() => _RegisterUserScreenState();
@@ -124,7 +126,7 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.0.200:8082/attendance/register'),
+        Uri.parse('http://192.168.0.200:8082/employee/register'),
       );
       request.fields['empId'] = _empId!;
       request.fields['empName'] = _empName!;
@@ -142,10 +144,18 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
         );
         await Future.delayed(Duration(seconds: 1));
         if (mounted) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => HomeDashboard()),
-            (route) => false,
-          );
+          // After registration, use roles to decide navigation
+          if (widget.roles.contains('MANAGER')) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => ManagerScreen()),
+              (route) => false,
+            );
+          } else {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => HomeDashboard()),
+              (route) => false,
+            );
+          }
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

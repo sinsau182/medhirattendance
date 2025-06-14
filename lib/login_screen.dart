@@ -59,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
           // Save roles from response (case-insensitive)
           List roles = [];
           if (data['roles'] != null && data['roles'] is List) {
-            roles = (data['roles'] as List).map((r) => r.toString().toUpperCase()).toList();
+            roles = (data['roles'] as List).map((r) => r.toString().toUpperCase().trim()).toList();
             await prefs.setString('roles', json.encode(roles));
           }
 
@@ -84,18 +84,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 context,
                 MaterialPageRoute(builder: (context) => ManagerScreen()),
               );
-            } else if (roles.contains('EMPLOYEE')) {
+            } else {
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (context) => HomeDashboard()),
               );
-            } else {
-              _showError('No valid role found.');
             }
           } else {
+            // Not registered, pass roles to RegisterUserScreen
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => RegisterUserScreen()),
+              MaterialPageRoute(builder: (context) => RegisterUserScreen(roles: roles)),
             );
           }
         } else {

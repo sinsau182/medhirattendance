@@ -9,6 +9,7 @@ import 'attendance.dart';
 import 'check-in.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'manager_screen.dart';
 
 class HomeDashboard extends StatefulWidget {
   @override
@@ -273,6 +274,17 @@ class _HomeDashboardState extends State<HomeDashboard> {
     final int hoursLeft = secondsLeft ~/ 3600;
     final int minutesLeft = (secondsLeft % 3600) ~/ 60;
     final bool goalAchieved = progress >= 1.0;
+
+    // --- Bottom NavBar logic ---
+    Future<bool> isManager() async {
+      final prefs = await SharedPreferences.getInstance();
+      final rolesString = prefs.getString('roles');
+      if (rolesString != null) {
+        final roles = List<String>.from(json.decode(rolesString));
+        return roles.contains('MANAGER');
+      }
+      return false;
+    }
 
     return Scaffold(
       backgroundColor: Color(0xFFF7F8FA),
@@ -895,6 +907,41 @@ class _HomeDashboardState extends State<HomeDashboard> {
             ),
           ),
         ),
+      ),
+      // Show bottom nav only if manager
+      bottomNavigationBar: FutureBuilder<bool>(
+        future: isManager(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done || !snapshot.hasData || !snapshot.data!) {
+            return SizedBox.shrink();
+          }
+          return BottomNavigationBar(
+            currentIndex: 0, // Personal
+            onTap: (index) {
+              if (index == 0) {
+                // Already on HomeDashboard
+              } else if (index == 1) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => ManagerScreen()),
+                );
+              }
+            },
+            backgroundColor: Colors.white,
+            selectedItemColor: Color(0xFF4F8CFF),
+            unselectedItemColor: Colors.grey[400],
+            items: [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline),
+                label: 'Personal',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.groups),
+                label: 'Team',
+              ),
+            ],
+          );
+        },
       ),
     );
   }
