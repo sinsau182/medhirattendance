@@ -92,8 +92,6 @@ class _ManagerScreenState extends State<ManagerScreen> {
     }
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
