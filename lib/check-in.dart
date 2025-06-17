@@ -217,10 +217,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
       try {
         var request = http.MultipartRequest(
           'POST',
-          Uri.parse('http://192.168.0.200:8082/attendance/checkin'),
+          Uri.parse('http://192.168.0.200:8082/employee/checkin'),
         );
 
-        request.fields['employeeId'] = selectedUser!;
+        request.fields['empId'] = selectedUser!;
 
         String? mimeType = lookupMimeType(_capturedImagePath!) ?? 'image/jpeg';
         var mediaType = MediaType.parse(mimeType);

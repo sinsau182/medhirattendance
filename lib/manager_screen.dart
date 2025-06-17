@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'home_dashboard.dart';
+import 'package:http/http.dart' as http;
 
 class ManagerScreen extends StatefulWidget {
   const ManagerScreen({Key? key}) : super(key: key);
@@ -15,20 +16,18 @@ class ManagerScreen extends StatefulWidget {
 }
 
 class _ManagerScreenState extends State<ManagerScreen> {
+
   int _selectedNavIndex = 1; // 0: Employee, 1: Manager
   int _selectedStatIndex = 0; // 0: Total, 1: Checked In, 2: Checked Out
   String _searchQuery = '';
 
-  // Placeholder employee data
-  final List<Map<String, dynamic>> _employees = [
-    {'name': 'Sarah Johnson', 'id': 'EMP003', 'role': 'Design', 'checkedIn': true},
-    {'name': 'John Doe', 'id': 'EMP001', 'role': 'Engineering', 'checkedIn': false},
-    {'name': 'Jane Smith', 'id': 'EMP002', 'role': 'Marketing', 'checkedIn': true},
-    {'name': 'Alex Lee', 'id': 'EMP004', 'role': 'Sales', 'checkedIn': false},
-  ];
+  List<Map<String, dynamic>> _employees = [];
+  bool _isLoading = true;
 
   static const Color kPrimaryBlue = Color(0xFF4F8CFF);
   static const Color kLightBlue = Color(0xFFF5F6FA);
+
+    String employeeName = "";
 
   // --- Bottom NavBar logic ---
   Future<bool> isManager() async {
@@ -40,6 +39,60 @@ class _ManagerScreenState extends State<ManagerScreen> {
     }
     return false;
   }
+
+  Future<void> _loadEmployeeName() async {
+    final prefs = await SharedPreferences.getInstance();
+    final employeeName = prefs.getString('employeeName');
+    setState(() {
+      this.employeeName = employeeName ?? "Employee";
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEmployeeName();
+    _fetchEmployees();
+  }
+
+  Future<void> _fetchEmployees() async {
+    final prefs = await SharedPreferences.getInstance();
+    final empId = prefs.getString('employeeId');
+    final token = prefs.getString('authToken');
+    print('Fetching employees for manager ID: $empId');
+    
+    if (token == null) {
+      print('Error: No authentication token found');
+      return;
+    }
+
+    final response = await http.get(
+      Uri.parse('http://192.168.0.200:8080/employees/manager/$empId'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    print('API Response Status Code: ${response.statusCode}');
+    print('API Response Body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final List<dynamic> jsonData = json.decode(response.body);
+      final List<Map<String, dynamic>> employeeData = jsonData.map((item) {
+        final Map<String, dynamic> employee = Map<String, dynamic>.from(item);
+        employee['checkedIn'] = false; // Add default value for checkedIn
+        return employee;
+      }).toList();
+      print('Parsed Data: $employeeData');
+      setState(() {
+        _employees = employeeData;
+      });
+    } else {
+      print('Error: Failed to fetch employees. Status code: ${response.statusCode}');
+    }
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -74,9 +127,9 @@ class _ManagerScreenState extends State<ManagerScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Mednir Attendance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.black)),
+                        Text('Medhir Attendance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.black)),
                         SizedBox(height: 2),
-                        Text('Employee: jvjhvhjv', style: TextStyle(color: Colors.grey[600], fontSize: 15)),
+                        Text('Manager: $employeeName', style: TextStyle(color: Colors.grey[600], fontSize: 15)),
                       ],
                     ),
                   ],
@@ -294,7 +347,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
                     children: [
                       Text(emp['name'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black)),
                       SizedBox(height: 2),
-                      Text('${emp['id']} • ${emp['role']}', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                      Text('${emp['employeeId']} • ${emp['departmentName']}', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                     ],
                   ),
                 ),

@@ -92,7 +92,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
       final today = DateFormat('yyyy-MM-dd').format(_now);
 
       final response = await http.get(
-        Uri.parse('http://192.168.0.200:8082/attendance/daily/$employeeId/$today'),
+        Uri.parse('http://192.168.0.200:8082/employee/daily/$employeeId/$today'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -154,7 +154,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
       final employeeId = prefs.getString('employeeId');
       if (token == null) return;
 
-      var uri = Uri.parse('http://192.168.0.200:8082/attendance/checkout');
+      var uri = Uri.parse('http://192.168.0.200:8082/employee/checkout');
       var request = http.MultipartRequest('POST', uri);
       request.fields['employeeId'] = employeeId!;
       request.headers['Authorization'] = 'Bearer $token';
@@ -388,6 +388,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
                         if (confirm == true) {
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('authToken');
+                          await prefs.remove('employeeId');
+                          await prefs.remove('employeeName');
+                          await prefs.remove('roles');
+
                           if (context.mounted) {
                             Navigator.of(context).pushAndRemoveUntil(
                               MaterialPageRoute(builder: (context) => LoginScreen()),

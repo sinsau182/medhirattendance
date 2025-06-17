@@ -9,6 +9,7 @@ import 'toast.dart';
 import 'home_dashboard.dart';
 import 'register.dart';
 import 'manager_screen.dart';
+import 'package:jwt_decode/jwt_decode.dart';
 
 
 class LoginScreen extends StatefulWidget {
@@ -56,6 +57,11 @@ class _LoginScreenState extends State<LoginScreen> {
           await prefs.setString('authToken', data['token']);
           await prefs.setString('employeeId', data['employeeId']);
 
+          // Parse JWT token to get employee name
+          final token = data['token'];
+          Map<String, dynamic> payload = Jwt.parseJwt(token);
+          await prefs.setString('employeeName', payload['name'] ?? '');
+
           // Save roles from response (case-insensitive)
           List roles = [];
           if (data['roles'] != null && data['roles'] is List) {
@@ -63,19 +69,16 @@ class _LoginScreenState extends State<LoginScreen> {
             await prefs.setString('roles', json.encode(roles));
           }
 
-          // Save employeeName if present
-          if (data['name'] != null) {
-            await prefs.setString('employeeName', data['name']);
-          }
-
           // Show Custom Toast
           ToastHelper.showCustomToast(context);
 
           // Check if employee is registered
           final empId = prefs.getString('employeeId') ?? '';
-          final checkUrl = 'http://192.168.0.200:8082/attendance/registered-users/$empId';
+          final checkUrl = 'http://192.168.0.200:8082/manager/registered-users/$empId';
           final checkResponse = await http.get(Uri.parse(checkUrl));
           final checkData = json.decode(checkResponse.body);
+
+          print('Check registration response: $checkData');
 
           if (checkData['status'] == true) {
             // Registration complete, now check roles

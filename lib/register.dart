@@ -46,8 +46,8 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
   Future<void> _loadEmpData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _empId = prefs.getString('employeeId') ?? 'MED102';
-      _empName = prefs.getString('employeeName') ?? 'ankit';
+      _empId = prefs.getString('employeeId');
+      _empName = prefs.getString('employeeName');
     });
   }
 
