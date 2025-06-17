@@ -520,8 +520,107 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ),
               ),
               SizedBox(height: 16),
-
+                            // Progress Card
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text("Today's Progress",
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            )),
+                        Spacer(),
+                          if (!goalAchieved)
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Color(0xFFE3EDFF),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                "${hoursLeft}h ${minutesLeft}m to go",
+                                style: TextStyle(
+                                  color: Color(0xFF2563EB),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          if (goalAchieved)
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFE6F9ED),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            "Goal Achieved!",
+                            style: TextStyle(
+                              color: Color(0xFF1DBF73),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Text(
+                            "${hours}h ${minutes}m",
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 24,
+                          ),
+                        ),
+                        Spacer(),
+                        Text(
+                            "${(progress * 100).clamp(0, 100).toStringAsFixed(0)}%",
+                          style: TextStyle(
+                              color: Color(0xFF2563EB),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    LinearProgressIndicator(
+                      value: progress.clamp(0.0, 1.0),
+                      minHeight: 7,
+                      backgroundColor: Color(0xFFE3E6F6),
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5B6BFF)),
+                    ),
+                    SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("0h", style: TextStyle(color: Colors.black38)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 16),
               // Check-In/Out Buttons
+
               Row(
                 children: [
                   Expanded(
@@ -627,107 +726,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ],
               ),
               SizedBox(height: 16),
-
-              // Progress Card
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text("Today's Progress",
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                            )),
-                        Spacer(),
-                          if (!goalAchieved)
-                            Container(
-                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Color(0xFFE3EDFF),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                "${hoursLeft}h ${minutesLeft}m to go",
-                                style: TextStyle(
-                                  color: Color(0xFF2563EB),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          if (goalAchieved)
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Color(0xFFE6F9ED),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            "Goal Achieved!",
-                            style: TextStyle(
-                              color: Color(0xFF1DBF73),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Text(
-                            "${hours}h ${minutes}m",
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 24,
-                          ),
-                        ),
-                        Spacer(),
-                        Text(
-                            "${(progress * 100).clamp(0, 100).toStringAsFixed(0)}%",
-                          style: TextStyle(
-                              color: Color(0xFF2563EB),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: progress.clamp(0.0, 1.0),
-                      minHeight: 7,
-                      backgroundColor: Color(0xFFE3E6F6),
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5B6BFF)),
-                    ),
-                    SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text("0h", style: TextStyle(color: Colors.black38)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 16),
-
               // Monthly Summary Button
               SizedBox(
                 width: double.infinity,
@@ -756,7 +754,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ),
               ),
               SizedBox(height: 16),
-
               // Time Entries
               Text(
                 "Time Entries",
