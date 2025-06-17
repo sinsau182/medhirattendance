@@ -474,13 +474,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ),
                 child: Column(
                   children: [
-                      Text(
-                        DateFormat('hh:mm a').format(DateTime.now()),
-                        style: GoogleFonts.poppins(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    TimeDisplay(),
                     SizedBox(height: 4),
                     Text(
                         DateFormat('EEEE, MMMM d, y').format(DateTime.now()),
