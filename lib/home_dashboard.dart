@@ -474,7 +474,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ),
                 child: Column(
                   children: [
-                    TimeDisplay(),
+                      Text(
+                        DateFormat('hh:mm a').format(DateTime.now()),
+                        style: GoogleFonts.poppins(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     SizedBox(height: 4),
                     Text(
                         DateFormat('EEEE, MMMM d, y').format(DateTime.now()),
@@ -618,9 +624,11 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   ],
                 ),
               ),
-              SizedBox(height: 16),
-              // Check-In/Out Buttons
 
+
+              SizedBox(height: 16),
+
+              // Check-In/Out Buttons
               Row(
                 children: [
                   Expanded(
@@ -725,7 +733,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   ),
                 ],
               ),
+
               SizedBox(height: 16),
+
               // Monthly Summary Button
               SizedBox(
                 width: double.infinity,
@@ -754,6 +764,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ),
               ),
               SizedBox(height: 16),
+
               // Time Entries
               Text(
                 "Time Entries",
