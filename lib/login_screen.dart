@@ -144,56 +144,182 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFF5F6FA),
+      backgroundColor: const Color(0xFFF4F7FE),
       body: Center(
         child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(horizontal: 28, vertical: 32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('Login', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87)),
+              // Top Icon
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.08),
+                      blurRadius: 16,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                padding: EdgeInsets.all(24),
+                child: Icon(Icons.assignment, color: Color(0xFF2563EB), size: 48),
+              ),
+              SizedBox(height: 24),
+              // Welcome Text
+              Text(
+                "Welcome to Medhir",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 26,
+                  color: Color(0xFF232B55),
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                "Sign in to mark your attendance",
+                style: TextStyle(
+                  color: Colors.black54,
+                  fontSize: 16,
+                ),
+              ),
               SizedBox(height: 32),
-              TextField(
-                controller: emailController,
-                decoration: InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: Icon(Icons.email_outlined),
+              Container(
+                width: 320,
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 18,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
                 ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              SizedBox(height: 18),
-              TextField(
-                controller: passwordController,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: Icon(Icons.lock_outline),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Text(
+                        "Employee Login",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                          color: Color(0xFF232B55),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 28),
+                    Text(
+                      "Email",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF232B55),
+                        fontSize: 15,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    TextField(
+                      controller: emailController,
+                      decoration: InputDecoration(
+                        prefixIcon: Icon(Icons.person_outline, color: Colors.grey),
+                        hintText: "Enter your Employee ID",
+                        filled: true,
+                        fillColor: Color(0xFFF4F7FE),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                    SizedBox(height: 18),
+                    Text(
+                      "Password",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF232B55),
+                        fontSize: 15,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    TextField(
+                      controller: passwordController,
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
+                        prefixIcon: Icon(Icons.lock_outline, color: Colors.grey),
+                        hintText: "Enter your password",
+                        filled: true,
+                        fillColor: Color(0xFFF4F7FE),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: EdgeInsets.symmetric(vertical: 16),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 28),
+                    SizedBox(
+                      width: double.infinity,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: isFilled
+                              ? LinearGradient(
+                            colors: [Color(0xFF2563EB), Color(0xFF1CB5E0)],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          )
+                              : LinearGradient(
+                            colors: [Colors.blue.shade200, Colors.blue.shade100],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ElevatedButton(
+                          onPressed: isFilled ? _login : null,
+                          style: ElevatedButton.styleFrom(
+                            elevation: 0,
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            textStyle: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          child: Text(
+                            "Sign In",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(height: 28),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF4F8CFF),
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  onPressed: isFilled ? _login : null,
-                  child: Text('Login', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-              ),
+              SizedBox(height: 40),
             ],
           ),
         ),

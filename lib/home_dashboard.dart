@@ -16,10 +16,42 @@ class HomeDashboard extends StatefulWidget {
   State<HomeDashboard> createState() => _HomeDashboardState();
 }
 
-class _HomeDashboardState extends State<HomeDashboard> {
-  String employeeName = "";
+class TimeDisplay extends StatefulWidget {
+  @override
+  _TimeDisplayState createState() => _TimeDisplayState();
+}
+
+class _TimeDisplayState extends State<TimeDisplay> {
   DateTime _now = DateTime.now();
   Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+      setState(() {
+        _now = DateTime.now();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      DateFormat('HH:mm:ss').format(_now),
+      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+    );
+  }
+}
+
+class _HomeDashboardState extends State<HomeDashboard> {
+  String employeeName = "";
   Map<String, dynamic>? dailyAttendance;
   bool isLoadingAttendance = false;
 
@@ -39,19 +71,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
     _loadEmployeeName();
     _loadDailyAttendance();
     _loadEmployeeId();
-    _now = DateTime.now();
-    
-    // Timer for current time only
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-      setState(() {
-        _now = DateTime.now();
-      });
-    });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     sessionTimer?.cancel();
     super.dispose();
   }
@@ -89,7 +112,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
       final employeeId = prefs.getString('employeeId');
       if (token == null) return;
 
-      final today = DateFormat('yyyy-MM-dd').format(_now);
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
       final response = await http.get(
         Uri.parse('http://192.168.0.200:8082/employee/daily/$employeeId/$today'),
@@ -132,7 +155,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
         dailyAttendance = {
           'logs': [],
           'employeeId': employeeId,
-          'date': DateFormat('yyyy-MM-dd').format(_now),
+          'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
         };
       });
     } finally {
@@ -452,7 +475,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 child: Column(
                   children: [
                       Text(
-                        DateFormat('hh:mm a').format(_now),
+                        DateFormat('hh:mm a').format(DateTime.now()),
                         style: GoogleFonts.poppins(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -460,7 +483,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       ),
                     SizedBox(height: 4),
                     Text(
-                        DateFormat('EEEE, MMMM d, y').format(_now),
+                        DateFormat('EEEE, MMMM d, y').format(DateTime.now()),
                         style: TextStyle(color: Colors.black54, fontSize: 12),
                     ),
                     SizedBox(height: 10),
@@ -498,46 +521,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
                         ),
                       ],
                     ),
-                      // Session Timer Card
-                    // if (isCheckedIn && sessionStartTime != null) ...[
-                    //   SizedBox(height: 12),
-                    //   Container(
-                    //     width: double.infinity,
-                    //     padding: EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                    //     decoration: BoxDecoration(
-                    //       color: Color(0xFFF1F6FE),
-                    //       borderRadius: BorderRadius.circular(12),
-                    //     ),
-                    //     child: Column(
-                    //       children: [
-                    //         Row(
-                    //           mainAxisAlignment: MainAxisAlignment.center,
-                    //           children: [
-                    //             Icon(Icons.access_time, color: Color(0xFF2563EB)),
-                    //             SizedBox(width: 6),
-                    //             Text(
-                    //               "Current Session",
-                    //               style: TextStyle(
-                    //                 color: Color(0xFF2563EB),
-                    //                 fontWeight: FontWeight.w600,
-                    //                 fontSize: 15,
-                    //               ),
-                    //             ),
-                    //           ],
-                    //         ),
-                    //         SizedBox(height: 6),
-                    //         Text(
-                    //           _formatDuration(sessionDuration),
-                    //           style: TextStyle(
-                    //             color: Color(0xFF232B55),
-                    //             fontWeight: FontWeight.bold,
-                    //             fontSize: 28,
-                    //           ),
-                    //         ),
-                    //       ],
-                    //     ),
-                    //   ),
-                    // ],
                     SizedBox(height: 2),
                   ],
                 ),
@@ -744,18 +727,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text("0h", style: TextStyle(color: Colors.black38)),
-                          // Text(
-                          //   isCurrentlyCheckedIn 
-                          //       ? "Session Active"
-                          //       : "Session Inactive",
-                          //   style: TextStyle(
-                          //     color: isCurrentlyCheckedIn 
-                          //         ? Color(0xFF5B6BFF)
-                          //         : Color(0xFFDC2626),
-                          //     fontWeight: FontWeight.w500,
-                          //   ),
-                          // ),
-                        // Text("Daily Goal: 8h 0m", style: TextStyle(color: Colors.black38)),
                       ],
                     ),
                   ],
