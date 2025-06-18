@@ -1100,3 +1100,4 @@ class _CameraPopupScreenState extends State<CameraPopupScreen> {
     );
   }
 }
+
