@@ -799,6 +799,8 @@ class _CameraPopupScreenState extends State<CameraPopupScreen> {
   bool _flashOn = false;
   int _selectedCameraIdx = 0;
   List<CameraDescription> _cameras = [];
+  bool _isProcessing = false;
+  bool _faceRecognitionFailed = false;
 
   @override
   void initState() {
@@ -854,6 +856,139 @@ class _CameraPopupScreenState extends State<CameraPopupScreen> {
       _isError = false;
     });
     await _initCamera(newIdx);
+  }
+
+  Future<void> _processTeamCheckIn() async {
+    if (_capturedFile == null) return;
+
+    setState(() {
+      _isProcessing = true;
+      _faceRecognitionFailed = false;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken');
+      final managerId = prefs.getString('employeeId');
+      
+      if (token == null || managerId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Authentication error. Please try again.')),
+        );
+        return;
+      }
+
+      // Create multipart request
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://192.168.0.200:8082/manager/checkin'),
+      );
+
+      // Add authorization header
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Add manager ID
+      request.fields['managerId'] = managerId;
+
+      // Add image file
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          _capturedFile!.path,
+        ),
+      );
+
+      // Send request
+      var response = await request.send();
+      var responseData = await response.stream.bytesToString();
+      
+      // Log the response
+      print('Team Check-in API Response Status: ${response.statusCode}');
+      print('Team Check-in API Response Body: $responseData');
+      print('Response length: ${responseData.length}');
+      print('Response contains "face": ${responseData.toLowerCase().contains('face')}');
+      print('Response contains "error": ${responseData.toLowerCase().contains('error')}');
+      print('Response contains "failed": ${responseData.toLowerCase().contains('failed')}');
+
+      // Always check the response body for failure, regardless of status code
+      try {
+        final responseJson = json.decode(responseData);
+        bool isFailure = false;
+        if (responseJson is Map<String, dynamic>) {
+          final status = responseJson['status']?.toString().toLowerCase();
+          final message = responseJson['message']?.toString().toLowerCase();
+          if (status == 'not found' ||
+              (message != null && (message.contains('not recognized') || message.contains('not found')))) {
+            isFailure = true;
+          }
+        }
+        if (isFailure) {
+          setState(() {
+            _faceRecognitionFailed = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Face recognition failed. Please try manual check-in.'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+          return;
+        }
+        // Otherwise, treat as success
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Team check-in successful!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } catch (e) {
+        // If parsing fails, treat as failure
+        setState(() {
+          _faceRecognitionFailed = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Face recognition failed. Please try manual check-in.'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error during team check-in: $e');
+      setState(() {
+        _faceRecognitionFailed = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error during team check-in. Please try manual check-in.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isProcessing = false;
+      });
+    }
+  }
+
+  void _navigateToManualCheckIn() {
+    if (_capturedFile != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ManualCheckInScreen(capturedImage: _capturedFile!),
+        ),
+      );
+    }
   }
 
   @override
@@ -987,104 +1122,141 @@ class _CameraPopupScreenState extends State<CameraPopupScreen> {
                             ),
                           ),
                         ),
-                      if (_capturedFile != null)
+                      if (_capturedFile != null && !_faceRecognitionFailed)
                         Padding(
                           padding: const EdgeInsets.only(top: 10.0, bottom: 6.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          child: Column(
                             children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: kPrimaryBlue,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      side: BorderSide(color: kPrimaryBlue),
+                                      padding: EdgeInsets.symmetric(horizontal: 36, vertical: 16),
+                                    ),
+                                    onPressed: _isProcessing ? null : () {
+                                      setState(() {
+                                        _capturedFile = null;
+                                        _faceRecognitionFailed = false;
+                                      });
+                                    },
+                                    child: Text('Retry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  ),
+                                  SizedBox(width: 24),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      padding: EdgeInsets.symmetric(horizontal: 36, vertical: 16),
+                                    ),
+                                    onPressed: _isProcessing ? null : _processTeamCheckIn,
+                                    child: _isProcessing
+                                        ? Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                                ),
+                                              ),
+                                              SizedBox(width: 8),
+                                              Text('Processing...', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                            ],
+                                          )
+                                        : Text('Send', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  ),
+                                ],
+                              ),
+                              // Debug button for testing face recognition failure
+                              SizedBox(height: 12),
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: kPrimaryBlue,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  side: BorderSide(color: kPrimaryBlue),
-                                  padding: EdgeInsets.symmetric(horizontal: 36, vertical: 16),
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                                 ),
                                 onPressed: () {
                                   setState(() {
-                                    _capturedFile = null;
+                                    _faceRecognitionFailed = true;
                                   });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Debug: Simulating face recognition failure'),
+                                      backgroundColor: Colors.red,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  );
                                 },
-                                child: Text('Retry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                child: Text('Debug: Simulate Failure', style: TextStyle(fontSize: 12)),
                               ),
-                              SizedBox(width: 24),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  padding: EdgeInsets.symmetric(horizontal: 36, vertical: 16),
+                            ],
+                          ),
+                        ),
+                      // Manual and Retry buttons when face recognition fails
+                      if (_capturedFile != null && _faceRecognitionFailed)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10.0, bottom: 6.0),
+                          child: Column(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
                                 ),
-                                onPressed: () async {
-                                  try {
-                                    final prefs = await SharedPreferences.getInstance();
-                                    final token = prefs.getString('authToken');
-                                    final managerId = prefs.getString('employeeId');
-                                    
-                                    if (token == null || managerId == null) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Authentication error. Please try again.')),
-                                      );
-                                      return;
-                                    }
-
-                                    if (_capturedFile == null) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('No image captured. Please try again.')),
-                                      );
-                                      return;
-                                    }
-
-                                    // Create multipart request
-                                    var request = http.MultipartRequest(
-                                      'POST',
-                                      Uri.parse('http://192.168.0.200:8082/manager/checkin'),
-                                    );
-
-                                    // Add authorization header
-                                    request.headers['Authorization'] = 'Bearer $token';
-
-                                    // Add manager ID
-                                    request.fields['managerId'] = managerId;
-
-                                    // Add image file
-                                    request.files.add(
-                                      await http.MultipartFile.fromPath(
-                                        'file',
-                                        _capturedFile!.path,
-                                      ),
-                                    );
-
-                                    // Send request
-                                    var response = await request.send();
-                                    var responseData = await response.stream.bytesToString();
-                                    
-                                    // Log the response
-                                    print('Team Check-in API Response Status: ${response.statusCode}');
-                                    print('Team Check-in API Response Body: $responseData');
-
-                                    if (response.statusCode == 200) {
-                                      // Success
-                                      Navigator.pop(context);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Team check-in successful!')),
-                                      );
-                                    } else {
-                                      // Error
-                                      print('Team Check-in Failed. Status: ${response.statusCode}, Response: $responseData');
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Failed to check-in team. Please try again.')),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    print('Error during team check-in: $e');
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Error during team check-in. Please try again.')),
-                                    );
-                                  }
-                                },
-                                child: Text('Send', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                child: Text(
+                                  'Face recognition failed. Please try manual check-in.',
+                                  style: TextStyle(
+                                    color: Colors.orange[700],
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              SizedBox(height: 16),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: kPrimaryBlue,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      side: BorderSide(color: kPrimaryBlue),
+                                      padding: EdgeInsets.symmetric(horizontal: 36, vertical: 16),
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _capturedFile = null;
+                                        _faceRecognitionFailed = false;
+                                      });
+                                    },
+                                    child: Text('Retry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  ),
+                                  SizedBox(width: 24),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orange,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      padding: EdgeInsets.symmetric(horizontal: 36, vertical: 16),
+                                    ),
+                                    onPressed: _navigateToManualCheckIn,
+                                    child: Text('Manual', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -1097,6 +1269,375 @@ class _CameraPopupScreenState extends State<CameraPopupScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// Manual Check-in Screen
+class ManualCheckInScreen extends StatefulWidget {
+  final XFile capturedImage;
+  
+  const ManualCheckInScreen({Key? key, required this.capturedImage}) : super(key: key);
+
+  @override
+  State<ManualCheckInScreen> createState() => _ManualCheckInScreenState();
+}
+
+class _ManualCheckInScreenState extends State<ManualCheckInScreen> {
+  List<Map<String, dynamic>> _employees = [];
+  bool _isLoading = true;
+  String _searchQuery = '';
+  bool _isSubmitting = false;
+
+  static const Color kPrimaryBlue = Color(0xFF4F8CFF);
+  static const Color kLightBlue = Color(0xFFF5F6FA);
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchEmployees();
+  }
+
+  Future<void> _fetchEmployees() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    final prefs = await SharedPreferences.getInstance();
+    final empId = prefs.getString('employeeId');
+    final token = prefs.getString('authToken');
+    
+    if (token == null) {
+      print('Error: No authentication token found');
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('http://192.168.0.200:8080/employees/manager/$empId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonData = json.decode(response.body);
+        final List<Map<String, dynamic>> employeeData = jsonData.map((item) {
+          return Map<String, dynamic>.from(item);
+        }).toList();
+        
+        setState(() {
+          _employees = employeeData;
+          _isLoading = false;
+        });
+      } else {
+        print('Error: Failed to fetch employees. Status code: ${response.statusCode}');
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching employees: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _manualCheckIn(String employeeId, String employeeName) async {
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken');
+      final managerId = prefs.getString('employeeId');
+      
+      if (token == null || managerId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Authentication error. Please try again.')),
+        );
+        return;
+      }
+
+      // Create multipart request
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://192.168.0.200:8082/manager/checkin'),
+      );
+
+      // Add authorization header
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Add manager ID, employee ID, and employee name
+      request.fields['managerId'] = managerId;
+      request.fields['employeeId'] = employeeId;
+      request.fields['employeeName'] = employeeName;
+
+      // Add image file
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          widget.capturedImage.path,
+        ),
+      );
+
+      // Send request
+      var response = await request.send();
+      var responseData = await response.stream.bytesToString();
+      
+      print('Manual Check-in API Response Status: ${response.statusCode}');
+      print('Manual Check-in API Response Body: $responseData');
+
+      if (response.statusCode == 200) {
+        // Success
+        Navigator.pop(context); // Close manual screen
+        Navigator.pop(context); // Close camera screen
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Manual check-in successful!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } else {
+        // Error
+        print('Manual Check-in Failed. Status: ${response.statusCode}, Response: $responseData');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to check-in employee. Please try again.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error during manual check-in: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error during manual check-in. Please try again.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } finally {
+      setState(() {
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: kLightBlue,
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: kLightBlue,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: kLightBlue,
+        appBar: AppBar(
+          backgroundColor: kLightBlue,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded, color: kPrimaryBlue),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            'Manual Check-In',
+            style: TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+          centerTitle: true,
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              SizedBox(height: 16),
+              // Captured Image Preview
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: Container(
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.file(
+                      File(widget.capturedImage.path),
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: 20),
+              // Search Bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search by name, employee ID, or department',
+                    prefixIcon: Icon(Icons.search, color: Colors.grey[500]),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: kPrimaryBlue, width: 2),
+                    ),
+                  ),
+                  onChanged: (val) {
+                    setState(() {
+                      _searchQuery = val;
+                    });
+                  },
+                ),
+              ),
+              SizedBox(height: 16),
+              // Employee List
+              Expanded(
+                child: _isLoading
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(color: kPrimaryBlue),
+                            SizedBox(height: 16),
+                            Text('Loading team members...', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+                          ],
+                        ),
+                      )
+                    : _buildEmployeeList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmployeeList() {
+    // Filter employees based on search query
+    List<Map<String, dynamic>> filteredEmployees = _employees.where((e) =>
+      e['name'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
+      e['employeeId'].toString().toLowerCase().contains(_searchQuery.toLowerCase()) ||
+      e['departmentName'].toLowerCase().contains(_searchQuery.toLowerCase())
+    ).toList();
+
+    if (filteredEmployees.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+            SizedBox(height: 16),
+            Text(
+              _searchQuery.isEmpty ? 'No team members found' : 'No matching team members',
+              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: EdgeInsets.symmetric(horizontal: 20.0),
+      itemCount: filteredEmployees.length,
+      separatorBuilder: (context, index) => SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final emp = filteredEmployees[index];
+        final initials = emp['name'].split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase();
+        
+        return Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: _isSubmitting ? null : () => _manualCheckIn(
+              emp['employeeId'].toString(),
+              emp['name'],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: kPrimaryBlue.withOpacity(0.10),
+                    child: Text(
+                      initials,
+                      style: TextStyle(fontWeight: FontWeight.bold, color: kPrimaryBlue, fontSize: 18),
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          emp['name'],
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          '${emp['employeeId']} • ${emp['departmentName']}',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_isSubmitting)
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(kPrimaryBlue),
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      color: kPrimaryBlue,
+                      size: 20,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
