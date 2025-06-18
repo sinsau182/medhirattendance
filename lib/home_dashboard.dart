@@ -43,9 +43,219 @@ class _TimeDisplayState extends State<TimeDisplay> {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      DateFormat('HH:mm:ss').format(_now),
-      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+    return Column(
+      children: [
+        Text(
+          DateFormat('hh:mm a').format(_now),
+          style: GoogleFonts.poppins(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          DateFormat('EEEE, MMMM d, y').format(_now),
+          style: TextStyle(color: Colors.black54, fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
+// Separate widget for Today's Progress that updates independently
+class TodayProgressWidget extends StatefulWidget {
+  final Map<String, dynamic>? dailyAttendance;
+  final bool isCheckedIn;
+
+  const TodayProgressWidget({
+    Key? key,
+    required this.dailyAttendance,
+    required this.isCheckedIn,
+  }) : super(key: key);
+
+  @override
+  _TodayProgressWidgetState createState() => _TodayProgressWidgetState();
+}
+
+class _TodayProgressWidgetState extends State<TodayProgressWidget> {
+  Timer? _progressTimer;
+  final int dailyGoalSeconds = 8 * 60 * 60; // 8 hours
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isCheckedIn) {
+      _startProgressTimer();
+    }
+  }
+
+  @override
+  void didUpdateWidget(TodayProgressWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Start/stop timer based on check-in status changes
+    if (widget.isCheckedIn && !oldWidget.isCheckedIn) {
+      _startProgressTimer();
+    } else if (!widget.isCheckedIn && oldWidget.isCheckedIn) {
+      _stopProgressTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _progressTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startProgressTimer() {
+    _progressTimer?.cancel();
+    _progressTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          // This will trigger a rebuild of only this widget
+        });
+      }
+    });
+  }
+
+  void _stopProgressTimer() {
+    _progressTimer?.cancel();
+  }
+
+  // Single method to calculate total time consistently
+  Duration _getTotalSessionTime() {
+    if (widget.dailyAttendance == null || widget.dailyAttendance!['logs'] == null) {
+      return Duration.zero;
+    }
+
+    final logs = widget.dailyAttendance!['logs'] as List;
+    Duration total = Duration.zero;
+    
+    // Calculate time from completed sessions
+    for (int i = 0; i < logs.length - 1; i += 2) {
+      if (i + 1 < logs.length) {
+        final checkIn = DateTime.parse(logs[i]['timestamp']);
+        final checkOut = DateTime.parse(logs[i + 1]['timestamp']);
+        total += checkOut.difference(checkIn);
+      }
+    }
+
+    // Add current session time if last log is check-in
+    if (logs.isNotEmpty && logs.last['type'] == 'checkin') {
+      final lastCheckIn = DateTime.parse(logs.last['timestamp']);
+      total += DateTime.now().difference(lastCheckIn);
+    }
+
+    return total;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Duration totalSessionTime = _getTotalSessionTime();
+    final double progress = totalSessionTime.inSeconds / dailyGoalSeconds;
+    final int hours = totalSessionTime.inHours;
+    final int minutes = totalSessionTime.inMinutes.remainder(60);
+    final int secondsLeft = (dailyGoalSeconds - totalSessionTime.inSeconds).clamp(0, dailyGoalSeconds);
+    final int hoursLeft = secondsLeft ~/ 3600;
+    final int minutesLeft = (secondsLeft % 3600) ~/ 60;
+    final bool goalAchieved = progress >= 1.0;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text("Today's Progress",
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  )),
+              Spacer(),
+                if (!goalAchieved)
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Color(0xFFE3EDFF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      "${hoursLeft}h ${minutesLeft}m to go",
+                      style: TextStyle(
+                        color: Color(0xFF2563EB),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                if (goalAchieved)
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Color(0xFFE6F9ED),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  "Goal Achieved!",
+                  style: TextStyle(
+                    color: Color(0xFF1DBF73),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 10),
+          Row(
+            children: [
+              Text(
+                  "${hours}h ${minutes}m",
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                ),
+              ),
+              Spacer(),
+              Text(
+                  "${(progress * 100).clamp(0, 100).toStringAsFixed(0)}%",
+                style: TextStyle(
+                    color: Color(0xFF2563EB),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: progress.clamp(0.0, 1.0),
+            minHeight: 7,
+            backgroundColor: Color(0xFFE3E6F6),
+            valueColor: AlwaysStoppedAnimation<Color>(
+              widget.isCheckedIn ? Color(0xFF5B6BFF) : Colors.red,
+            ),
+          ),
+          SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text("0h", style: TextStyle(color: Colors.black38)),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -256,6 +466,33 @@ class _HomeDashboardState extends State<HomeDashboard> {
     return total;
   }
 
+  // Single method to calculate total time consistently
+  Duration _getTotalSessionTime() {
+    if (dailyAttendance == null || dailyAttendance!['logs'] == null) {
+      return Duration.zero;
+    }
+
+    final logs = dailyAttendance!['logs'] as List;
+    Duration total = Duration.zero;
+    
+    // Calculate time from completed sessions
+    for (int i = 0; i < logs.length - 1; i += 2) {
+      if (i + 1 < logs.length) {
+        final checkIn = DateTime.parse(logs[i]['timestamp']);
+        final checkOut = DateTime.parse(logs[i + 1]['timestamp']);
+        total += checkOut.difference(checkIn);
+      }
+    }
+
+    // Add current session time if last log is check-in
+    if (logs.isNotEmpty && logs.last['type'] == 'checkin') {
+      final lastCheckIn = DateTime.parse(logs.last['timestamp']);
+      total += DateTime.now().difference(lastCheckIn);
+    }
+
+    return total;
+  }
+
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
@@ -273,30 +510,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
   Widget build(BuildContext context) {
     final List<dynamic>? logs = dailyAttendance?['logs'] as List<dynamic>?;
     final bool isCurrentlyCheckedIn = logs != null && logs.isNotEmpty && logs.last['type'] == 'checkin';
-    
-    // Calculate total time from all sessions
-    Duration totalSessionTime = Duration.zero;
-    if (logs != null) {
-      for (int i = 0; i < logs.length - 1; i += 2) {
-        if (i + 1 < logs.length) {
-          final checkIn = DateTime.parse(logs[i]['timestamp']);
-          final checkOut = DateTime.parse(logs[i + 1]['timestamp']);
-          totalSessionTime += checkOut.difference(checkIn);
-        }
-      }
-      // Add current session time if last log is check-in
-      if (isCurrentlyCheckedIn && sessionStartTime != null) {
-        totalSessionTime += DateTime.now().difference(sessionStartTime!);
-      }
-    }
-
-    final double progress = totalSessionTime.inSeconds / dailyGoalSeconds;
-    final int hours = totalSessionTime.inHours;
-    final int minutes = totalSessionTime.inMinutes.remainder(60);
-    final int secondsLeft = (dailyGoalSeconds - totalSessionTime.inSeconds).clamp(0, dailyGoalSeconds);
-    final int hoursLeft = secondsLeft ~/ 3600;
-    final int minutesLeft = (secondsLeft % 3600) ~/ 60;
-    final bool goalAchieved = progress >= 1.0;
 
     // --- Bottom NavBar logic ---
     Future<bool> isManager() async {
@@ -474,21 +687,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ),
                 child: Column(
                   children: [
-                      Text(
-                        DateFormat('hh:mm a').format(DateTime.now()),
-                        style: GoogleFonts.poppins(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    SizedBox(height: 4),
-                    Text(
-                        DateFormat('EEEE, MMMM d, y').format(DateTime.now()),
-                        style: TextStyle(color: Colors.black54, fontSize: 12),
-                    ),
+                    TimeDisplay(),
                     SizedBox(height: 10),
-                      // Checked In/Out Badge
-                      Row(
+                    // Checked In/Out Badge
+                    Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
@@ -527,102 +729,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
               ),
               SizedBox(height: 16),
                             // Progress Card
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text("Today's Progress",
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                            )),
-                        Spacer(),
-                          if (!goalAchieved)
-                            Container(
-                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Color(0xFFE3EDFF),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                "${hoursLeft}h ${minutesLeft}m to go",
-                                style: TextStyle(
-                                  color: Color(0xFF2563EB),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          if (goalAchieved)
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Color(0xFFE6F9ED),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            "Goal Achieved!",
-                            style: TextStyle(
-                              color: Color(0xFF1DBF73),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Text(
-                            "${hours}h ${minutes}m",
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 24,
-                          ),
-                        ),
-                        Spacer(),
-                        Text(
-                            "${(progress * 100).clamp(0, 100).toStringAsFixed(0)}%",
-                          style: TextStyle(
-                              color: Color(0xFF2563EB),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: progress.clamp(0.0, 1.0),
-                      minHeight: 7,
-                      backgroundColor: Color(0xFFE3E6F6),
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5B6BFF)),
-                    ),
-                    SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text("0h", style: TextStyle(color: Colors.black38)),
-                      ],
-                    ),
-                  ],
-                ),
+              TodayProgressWidget(
+                dailyAttendance: dailyAttendance,
+                isCheckedIn: isCheckedIn,
               ),
 
 

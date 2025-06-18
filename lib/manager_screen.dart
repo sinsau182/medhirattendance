@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'home_dashboard.dart';
 import 'package:http/http.dart' as http;
+import 'register.dart';
 
 class ManagerScreen extends StatefulWidget {
   const ManagerScreen({Key? key}) : super(key: key);
@@ -23,6 +24,8 @@ class _ManagerScreenState extends State<ManagerScreen> {
 
   List<Map<String, dynamic>> _employees = [];
   bool _isLoading = true;
+  Set<String> _checkingOutEmployees = {}; // Track employees being checked out
+  Set<String> _registeredEmployeeIds = {}; // Track registered employee IDs
 
   static const Color kPrimaryBlue = Color(0xFF4F8CFF);
   static const Color kLightBlue = Color(0xFFF5F6FA);
@@ -56,6 +59,10 @@ class _ManagerScreenState extends State<ManagerScreen> {
   }
 
   Future<void> _fetchEmployees() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
     final prefs = await SharedPreferences.getInstance();
     final empId = prefs.getString('employeeId');
     final token = prefs.getString('authToken');
@@ -63,6 +70,9 @@ class _ManagerScreenState extends State<ManagerScreen> {
     
     if (token == null) {
       print('Error: No authentication token found');
+      setState(() {
+        _isLoading = false;
+      });
       return;
     }
 
@@ -84,14 +94,215 @@ class _ManagerScreenState extends State<ManagerScreen> {
         return employee;
       }).toList();
       print('Parsed Data: $employeeData');
+      
+      // Fetch team status to update checkedIn property
+      await _fetchTeamStatus(employeeData);
+      
+      // Fetch registered team members
+      await _fetchRegisteredTeamMembers(empId!);
+      
       setState(() {
         _employees = employeeData;
+        _isLoading = false;
       });
     } else {
       print('Error: Failed to fetch employees. Status code: ${response.statusCode}');
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
+  Future<void> _fetchTeamStatus(List<Map<String, dynamic>> employees) async {
+    final prefs = await SharedPreferences.getInstance();
+    final empId = prefs.getString('employeeId');
+    final token = prefs.getString('authToken');
+    
+    if (token == null || empId == null) {
+      print('Error: No authentication token or employee ID found');
+      return;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('http://192.168.0.200:8082/manager/team-status/$empId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+      
+      print('Team Status API Response Status Code: ${response.statusCode}');
+      print('Team Status API Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = json.decode(response.body);
+        
+        // Extract teamStatus array from the response
+        if (responseData.containsKey('teamStatus')) {
+          final List<dynamic> teamStatusData = responseData['teamStatus'] as List<dynamic>;
+          
+          // Create a map of employee IDs to their check-in status
+          Map<String, bool> checkedInMap = {};
+          for (var status in teamStatusData) {
+            if (status is Map<String, dynamic>) {
+              final employeeId = status['empId']?.toString(); // Using 'empId' from the API response
+              if (employeeId != null) {
+                // Check if status is "checked_in" (from the API response)
+                final statusValue = status['status']?.toString();
+                checkedInMap[employeeId] = statusValue == 'checked_in';
+              }
+            }
+          }
+          
+          // Update the checkedIn property for each employee
+          for (var employee in employees) {
+            final employeeId = employee['employeeId']?.toString();
+            if (employeeId != null && checkedInMap.containsKey(employeeId)) {
+              employee['checkedIn'] = checkedInMap[employeeId]!;
+            }
+          }
+          
+          print('Updated employees with team status: $employees');
+        } else {
+          print('Error: No teamStatus field found in response');
+        }
+      } else {
+        print('Error: Failed to fetch team status. Status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching team status: $e');
+    }
+  }
+
+  Future<void> _fetchRegisteredTeamMembers(String managerId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('authToken');
+    
+    if (token == null) {
+      print('Error: No authentication token found');
+      return;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('http://192.168.0.200:8082/manager/registered-team-members/$managerId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+      
+      print('Registered Team Members API Response Status Code: ${response.statusCode}');
+      print('Registered Team Members API Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = json.decode(response.body);
+        
+        if (responseData.containsKey('registeredEmpIds')) {
+          final List<dynamic> registeredIds = responseData['registeredEmpIds'] as List<dynamic>;
+          setState(() {
+            _registeredEmployeeIds = registeredIds.map((id) => id.toString()).toSet();
+          });
+          print('Registered employee IDs: $_registeredEmployeeIds');
+        }
+      } else {
+        print('Error: Failed to fetch registered team members. Status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching registered team members: $e');
+    }
+  }
+
+  Future<void> _checkoutEmployee(String employeeId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('authToken');
+    
+    if (token == null) {
+      print('Error: No authentication token found');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Authentication error. Please try again.')),
+      );
+      return;
+    }
+
+    // Set loading state for this employee
+    setState(() {
+      _checkingOutEmployees.add(employeeId);
+    });
+
+    try {
+      // Create multipart request for checkout
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://192.168.0.200:8082/employee/checkout'),
+      );
+
+      // Add authorization header
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Add employee ID as form data
+      request.fields['employeeId'] = employeeId;
+
+      // Send request
+      var response = await request.send();
+      var responseData = await response.stream.bytesToString();
+      
+      // Log the response
+      print('Checkout API Response Status: ${response.statusCode}');
+      print('Checkout API Response Body: $responseData');
+
+      if (response.statusCode == 200) {
+        // Success - update local state
+        setState(() {
+          final employee = _employees.firstWhere(
+            (emp) => emp['employeeId'].toString() == employeeId,
+            orElse: () => {},
+          );
+          if (employee.isNotEmpty) {
+            employee['checkedIn'] = false;
+          }
+          _checkingOutEmployees.remove(employeeId);
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Employee checked out successfully!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } else {
+        // Error
+        print('Checkout Failed. Status: ${response.statusCode}, Response: $responseData');
+        setState(() {
+          _checkingOutEmployees.remove(employeeId);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to check out employee. Please try again.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error during checkout: $e');
+      setState(() {
+        _checkingOutEmployees.remove(employeeId);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error during checkout. Please try again.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -139,11 +350,13 @@ class _ManagerScreenState extends State<ManagerScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
                 child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(
+                  onTap: () async {
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => CameraPopupScreen()),
                     );
+                    // Refresh data when returning from team check-in
+                    _fetchEmployees();
                   },
                   child: Container(
                     width: double.infinity,
@@ -212,7 +425,12 @@ class _ManagerScreenState extends State<ManagerScreen> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      await _fetchEmployees();
+                    },
                   child: _buildEmployeeListModern(),
+                  ),
                 ),
               ),
             ],
@@ -265,7 +483,10 @@ class _ManagerScreenState extends State<ManagerScreen> {
     } else if (index == 1) {
       count = _employees.where((e) => e['checkedIn']).length;
     } else {
-      count = _employees.where((e) => !e['checkedIn']).length;
+      // Count only registered employees who are not checked in
+      count = _employees.where((e) => 
+        !e['checkedIn'] && _registeredEmployeeIds.contains(e['employeeId'].toString())
+      ).length;
     }
     return Expanded(
       child: GestureDetector(
@@ -296,6 +517,19 @@ class _ManagerScreenState extends State<ManagerScreen> {
   }
 
   Widget _buildEmployeeListModern() {
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: kPrimaryBlue),
+            SizedBox(height: 16),
+            Text('Loading team data...', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+          ],
+        ),
+      );
+    }
+    
     // Filter employees based on selected stat
     List<Map<String, dynamic>> filteredEmployees;
     if (_selectedStatIndex == 0) {
@@ -303,7 +537,10 @@ class _ManagerScreenState extends State<ManagerScreen> {
     } else if (_selectedStatIndex == 1) {
       filteredEmployees = _employees.where((e) => e['checkedIn']).toList();
     } else {
-      filteredEmployees = _employees.where((e) => !e['checkedIn']).toList();
+      // For checked out tab, only show registered employees who are not checked in
+      filteredEmployees = _employees.where((e) => 
+        !e['checkedIn'] && _registeredEmployeeIds.contains(e['employeeId'].toString())
+      ).toList();
     }
     // Apply search filter
     filteredEmployees = filteredEmployees.where((e) =>
@@ -324,12 +561,16 @@ class _ManagerScreenState extends State<ManagerScreen> {
       itemBuilder: (context, index) {
         final emp = filteredEmployees[index];
         final initials = emp['name'].split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase();
+        final bool isCheckedIn = emp['checkedIn'] ?? false;
+        
         return Card(
           elevation: 1,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
             child: Row(
+              children: [
+                Stack(
               children: [
                 CircleAvatar(
                   radius: 22,
@@ -338,33 +579,201 @@ class _ManagerScreenState extends State<ManagerScreen> {
                     initials,
                     style: TextStyle(fontWeight: FontWeight.bold, color: kPrimaryBlue, fontSize: 16),
                   ),
+                    ),
+                    if (isCheckedIn)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: Icon(
+                            Icons.check,
+                            size: 10,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Row(
+                    children: [
                       Text(emp['name'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black)),
+                          SizedBox(width: 8),
+                          if (isCheckedIn && _selectedStatIndex == 0)
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.green.withOpacity(0.3)),
+                              ),
+                              child: Text(
+                                'Checked In',
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          // if (_selectedStatIndex == 0 && !_registeredEmployeeIds.contains(emp['employeeId'].toString()))
+                          //   Container(
+                          //     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          //     decoration: BoxDecoration(
+                          //       color: Colors.orange.withOpacity(0.1),
+                          //       borderRadius: BorderRadius.circular(12),
+                          //       border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                          //     ),
+                              // child: Text(
+                              //   'Not Registered',
+                              //   style: TextStyle(
+                              //     color: Colors.orange,
+                              //     fontSize: 11,
+                              //     fontWeight: FontWeight.w600,
+                              //   ),
+                              // ),
+                            // ),
+                        ],
+                      ),
                       SizedBox(height: 2),
                       Text('${emp['employeeId']} • ${emp['departmentName']}', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                     ],
                   ),
                 ),
-                if (_selectedStatIndex == 1)
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: kPrimaryBlue,
-                      side: BorderSide(color: kPrimaryBlue),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                // Show register button for non-registered employees in total tab
+                if (_selectedStatIndex == 0 && !_registeredEmployeeIds.contains(emp['employeeId'].toString()))
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [kPrimaryBlue, kPrimaryBlue.withOpacity(0.8)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: kPrimaryBlue.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    onPressed: () {
-                      setState(() {
-                        emp['checkedIn'] = false;
-                      });
-                    },
-                    icon: Icon(Icons.logout, size: 16),
-                    label: Text('Check Out', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => RegisterUserScreen(
+                                roles: ['EMPLOYEE'], // Default role for team members
+                                employeeId: emp['employeeId'],
+                                employeeName: emp['name'],
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.person_add_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                'Register',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (_selectedStatIndex == 1 && isCheckedIn)
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: _checkingOutEmployees.contains(emp['employeeId'].toString())
+                            ? [Colors.grey.shade400, Colors.grey.shade500]
+                            : [Colors.red.shade400, Colors.red.shade600],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (_checkingOutEmployees.contains(emp['employeeId'].toString()) 
+                              ? Colors.grey 
+                              : Colors.red).withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: _checkingOutEmployees.contains(emp['employeeId'].toString())
+                            ? null
+                            : () => _checkoutEmployee(emp['employeeId'].toString()),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_checkingOutEmployees.contains(emp['employeeId'].toString()))
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              else
+                                Icon(
+                                  Icons.logout_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              SizedBox(width: 2),
+                              Text(
+                                _checkingOutEmployees.contains(emp['employeeId'].toString())
+                                    ? 'Checking Out...'
+                                    : 'Check Out',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -400,7 +809,14 @@ class _CameraPopupScreenState extends State<CameraPopupScreen> {
   Future<void> _initCamera([int cameraIdx = 0]) async {
     try {
       _cameras = await availableCameras();
-      final camera = _cameras[cameraIdx];
+      
+      // Find front camera index
+      int frontCameraIdx = _cameras.indexWhere((camera) => camera.lensDirection == CameraLensDirection.front);
+      
+      // Use front camera if available, otherwise use the provided index
+      int selectedIdx = frontCameraIdx != -1 ? frontCameraIdx : cameraIdx;
+      
+      final camera = _cameras[selectedIdx];
       _controller = CameraController(
         camera,
         ResolutionPreset.high,
@@ -411,7 +827,7 @@ class _CameraPopupScreenState extends State<CameraPopupScreen> {
       await _initializeControllerFuture;
       setState(() {
         _isCameraReady = true;
-        _selectedCameraIdx = cameraIdx;
+        _selectedCameraIdx = selectedIdx;
         _flashOn = false;
       });
       await _controller!.setFlashMode(FlashMode.off);
@@ -504,8 +920,7 @@ class _CameraPopupScreenState extends State<CameraPopupScreen> {
                       SizedBox(height: 14),
                       // Camera preview or image preview
                       Container(
-                        width: previewWidth - 24,
-                        height: (previewWidth - 24) * 4 / 3,
+                        height: 440,
                         decoration: BoxDecoration(
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(20),
@@ -601,8 +1016,73 @@ class _CameraPopupScreenState extends State<CameraPopupScreen> {
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                   padding: EdgeInsets.symmetric(horizontal: 36, vertical: 16),
                                 ),
-                                onPressed: () {
-                                  Navigator.pop(context);
+                                onPressed: () async {
+                                  try {
+                                    final prefs = await SharedPreferences.getInstance();
+                                    final token = prefs.getString('authToken');
+                                    final managerId = prefs.getString('employeeId');
+                                    
+                                    if (token == null || managerId == null) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Authentication error. Please try again.')),
+                                      );
+                                      return;
+                                    }
+
+                                    if (_capturedFile == null) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('No image captured. Please try again.')),
+                                      );
+                                      return;
+                                    }
+
+                                    // Create multipart request
+                                    var request = http.MultipartRequest(
+                                      'POST',
+                                      Uri.parse('http://192.168.0.200:8082/manager/checkin'),
+                                    );
+
+                                    // Add authorization header
+                                    request.headers['Authorization'] = 'Bearer $token';
+
+                                    // Add manager ID
+                                    request.fields['managerId'] = managerId;
+
+                                    // Add image file
+                                    request.files.add(
+                                      await http.MultipartFile.fromPath(
+                                        'file',
+                                        _capturedFile!.path,
+                                      ),
+                                    );
+
+                                    // Send request
+                                    var response = await request.send();
+                                    var responseData = await response.stream.bytesToString();
+                                    
+                                    // Log the response
+                                    print('Team Check-in API Response Status: ${response.statusCode}');
+                                    print('Team Check-in API Response Body: $responseData');
+
+                                    if (response.statusCode == 200) {
+                                      // Success
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Team check-in successful!')),
+                                      );
+                                    } else {
+                                      // Error
+                                      print('Team Check-in Failed. Status: ${response.statusCode}, Response: $responseData');
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Failed to check-in team. Please try again.')),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    print('Error during team check-in: $e');
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error during team check-in. Please try again.')),
+                                    );
+                                  }
                                 },
                                 child: Text('Send', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                               ),

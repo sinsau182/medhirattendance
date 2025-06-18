@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:google_fonts/google_fonts.dart';
-// import 'employee-dashborad.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,9 +20,29 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isFilled = false;
 
-  bool get isFilled =>
-      emailController.text.isNotEmpty && passwordController.text.isNotEmpty;
+  @override
+  void initState() {
+    super.initState();
+    emailController.addListener(_updateFilledState);
+    passwordController.addListener(_updateFilledState);
+  }
+
+  @override
+  void dispose() {
+    emailController.removeListener(_updateFilledState);
+    passwordController.removeListener(_updateFilledState);
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  void _updateFilledState() {
+    setState(() {
+      _isFilled = emailController.text.isNotEmpty && passwordController.text.isNotEmpty;
+    });
+  }
 
   Future<void> _login() async {
     final String email = emailController.text.trim();
@@ -150,22 +169,22 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Top Icon
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.blue.withOpacity(0.08),
-                      blurRadius: 16,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                padding: EdgeInsets.all(24),
-                child: Icon(Icons.assignment, color: Color(0xFF2563EB), size: 48),
-              ),
+              // // Top Icon
+              // Container(
+              //   decoration: BoxDecoration(
+              //     color: Colors.white,
+              //     shape: BoxShape.circle,
+              //     boxShadow: [
+              //       BoxShadow(
+              //         color: Colors.blue.withOpacity(0.08),
+              //         blurRadius: 16,
+              //         offset: Offset(0, 4),
+              //       ),
+              //     ],
+              //   ),
+              //   padding: EdgeInsets.all(24),
+              //   child: Icon(Icons.assignment, color: Color(0xFF2563EB), size: 48),
+              // ),
               SizedBox(height: 24),
               // Welcome Text
               Text(
@@ -226,7 +245,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: emailController,
                       decoration: InputDecoration(
                         prefixIcon: Icon(Icons.person_outline, color: Colors.grey),
-                        hintText: "Enter your Employee ID",
+                        hintText: "Enter your Email ID",
                         filled: true,
                         fillColor: Color(0xFFF4F7FE),
                         border: OutlineInputBorder(
@@ -249,6 +268,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextField(
                       controller: passwordController,
                       obscureText: _obscurePassword,
+                      onChanged: (value) {
+                        setState(() {}); // Trigger rebuild to update isFilled state
+                      },
                       decoration: InputDecoration(
                         prefixIcon: Icon(Icons.lock_outline, color: Colors.grey),
                         hintText: "Enter your password",
@@ -277,7 +299,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: double.infinity,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          gradient: isFilled
+                          gradient: _isFilled
                               ? LinearGradient(
                             colors: [Color(0xFF2563EB), Color(0xFF1CB5E0)],
                             begin: Alignment.centerLeft,
@@ -291,7 +313,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: ElevatedButton(
-                          onPressed: isFilled ? _login : null,
+                          onPressed: _isFilled ? _login : null,
                           style: ElevatedButton.styleFrom(
                             elevation: 0,
                             backgroundColor: Colors.transparent,

@@ -12,7 +12,15 @@ import 'manager_screen.dart';
 
 class RegisterUserScreen extends StatefulWidget {
   final List roles;
-  const RegisterUserScreen({Key? key, required this.roles}) : super(key: key);
+  final String? employeeId;
+  final String? employeeName;
+  
+  const RegisterUserScreen({
+    Key? key, 
+    required this.roles, 
+    this.employeeId, 
+    this.employeeName,
+  }) : super(key: key);
 
   @override
   _RegisterUserScreenState createState() => _RegisterUserScreenState();
@@ -28,27 +36,16 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
   bool _isPhotoConfirming = false;
   bool _isLoading = false;
   bool _showCamera = false;
-  String? _empId;
-  String? _empName;
 
   @override
   void initState() {
     super.initState();
-    _loadEmpData();
     // Set status bar to dark icons for visibility
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark.copyWith(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
       statusBarBrightness: Brightness.light,
     ));
-  }
-
-  Future<void> _loadEmpData() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _empId = prefs.getString('employeeId');
-      _empName = prefs.getString('employeeName');
-    });
   }
 
   Future<void> _initializeCamera({int? cameraIndex}) async {
@@ -116,7 +113,7 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
   }
 
   Future<void> _submitRegistration() async {
-    if (_capturedImagePath == null || _empId == null || _empName == null) {
+    if (_capturedImagePath == null || widget.employeeId == null || widget.employeeName == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Missing photo or employee data!')),
       );
@@ -128,8 +125,8 @@ class _RegisterUserScreenState extends State<RegisterUserScreen> {
         'POST',
         Uri.parse('http://192.168.0.200:8082/employee/register'),
       );
-      request.fields['empId'] = _empId!;
-      request.fields['empName'] = _empName!;
+      request.fields['empId'] = widget.employeeId!;
+      request.fields['empName'] = widget.employeeName!;
       request.files.add(await http.MultipartFile.fromPath(
         'empImage',
         _capturedImagePath!,
