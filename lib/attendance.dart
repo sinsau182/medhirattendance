@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -11,6 +14,8 @@ class AttendanceScreen extends StatefulWidget {
 class _AttendanceScreenState extends State<AttendanceScreen> {
   DateTime _currentDate = DateTime.now();
   DateTime? _selectedDate; // Track which date's card is open
+  bool _isLoading = true;
+  Map<String, dynamic>? _attendanceData;
 
   // Legend/status mapping for demo
   final List<Map<String, dynamic>> legendList = [
@@ -24,40 +29,261 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     {'abbr': 'P/LOP', 'color': Color(0xFFE6E6FA), 'circle': Color(0xFF9575CD), 'label': 'Present Half Day on Loss of Pay'},
   ];
 
-  // Map for calendar lookup
-  final Map<String, Map<String, dynamic>> statusMap = {
-    // Assign each legend type to the first 8 days for testing
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-01': {'status': 'Present', 'abbr': 'P', 'color': Color(0xFFC8F7D8), 'circle': Color(0xFF34C759)},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-02': {'status': 'Present on Holiday', 'abbr': 'PH', 'color': Color(0xFFC8F7F7), 'circle': Color(0xFF4DD0E1)},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-03': {'status': 'Half Day', 'abbr': 'P/A', 'color': Color(0xFFFFF6E0), 'circle': Color(0xFFFFB300)},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-04': {'status': 'Half Day on Holiday', 'abbr': 'PH/A', 'color': Color(0xFFFFF6E0), 'circle': Color(0xFFFFB300)},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-05': {'status': 'Absent', 'abbr': 'A', 'color': Color(0xFFFFD6D6), 'circle': Color(0xFFFF3B30)},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-06': {'status': 'Loss of Pay', 'abbr': 'LOP', 'color': Color(0xFFFFE0E0), 'circle': Color(0xFFD32F2F)},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-07': {'status': 'Holiday', 'abbr': 'H', 'color': Color(0xFFF3F3F3), 'circle': Color(0xFFBDBDBD)},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-08': {'status': 'Present Half Day on Loss of Pay', 'abbr': 'P/LOP', 'color': Color(0xFFE6E6FA), 'circle': Color(0xFF9575CD)},
-    // Today: In Progress
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}': {'status': 'In Progress', 'abbr': 'P', 'color': Colors.orange, 'circle': Colors.orange},
-  };
+  // Map for calendar lookup - will be populated from API data
+  Map<String, Map<String, dynamic>> statusMap = {};
 
   // Dummy work hours data for demonstration
-  final Map<String, Map<String, String>> workHoursData = {
-    // Format: 'yyyy-MM-dd': { 'checkIn': '9:00 AM', 'checkOut': '5:30 PM', 'total': '8h 30m', 'status': 'Present' }
-    // Add a few for demo
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-01': {'checkIn': '9:00 AM', 'checkOut': '5:12 PM', 'total': '8h 12m', 'status': 'Present'},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-02': {'checkIn': '9:10 AM', 'checkOut': '5:20 PM', 'total': '8h 10m', 'status': 'Present on Holiday'},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-03': {'checkIn': '9:05 AM', 'checkOut': '1:00 PM', 'total': '4h 0m', 'status': 'Half Day'},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-04': {'checkIn': '10:00 AM', 'checkOut': '2:00 PM', 'total': '4h 0m', 'status': 'Half Day on Holiday'},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-05': {'status': 'Absent'},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-06': {'status': 'Loss of Pay'},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-07': {'status': 'Holiday'},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-08': {'checkIn': '9:30 AM', 'checkOut': '1:30 PM', 'total': '4h 0m', 'status': 'Present Half Day on Loss of Pay'},
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-09': {'checkIn': '9:00 AM', 'checkOut': '5:00 PM', 'total': '8h 0m', 'status': 'Present'},
-    // Today: only check-in, in progress
-    '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}': {
-      'checkIn': '10:00 AM',
-      'status': 'In Progress'
-    },
-  };
+  Map<String, Map<String, String>> workHoursData = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAttendanceData();
+  }
+
+  Future<void> _fetchAttendanceData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final employeeId = prefs.getString('employeeId');
+      final token = prefs.getString('authToken');
+
+      if (employeeId == null || token == null) {
+        print('Error: No employee ID or token found');
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final year = _currentDate.year;
+      final month = _currentDate.month;
+
+      final response = await http.get(
+        Uri.parse('http://192.168.0.200:8082/attendance-summary/$employeeId/$year/$month'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          _attendanceData = data;
+          _updateStatusMap(data);
+          _updateWorkHoursData(data);
+          _isLoading = false;
+        });
+      } else {
+        print('Error fetching attendance data: ${response.statusCode}');
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching attendance data: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _updateStatusMap(Map<String, dynamic> data) {
+    statusMap.clear();
+
+    // Map present dates
+    if (data['presentDates'] != null) {
+      for (String date in data['presentDates']) {
+        statusMap[date] = {
+          'status': 'Present',
+          'abbr': 'P',
+          'color': Color(0xFFC8F7D8),
+          'circle': Color(0xFF34C759)
+        };
+      }
+    }
+
+    // Map full leave dates (Absent)
+    if (data['fullLeaveDates'] != null) {
+      for (String date in data['fullLeaveDates']) {
+        statusMap[date] = {
+          'status': 'Absent',
+          'abbr': 'A',
+          'color': Color(0xFFFFD6D6),
+          'circle': Color(0xFFFF3B30)
+        };
+      }
+    }
+
+    // Map half day leave dates (P/A)
+    if (data['halfDayLeaveDates'] != null) {
+      for (String date in data['halfDayLeaveDates']) {
+        statusMap[date] = {
+          'status': 'Half Day',
+          'abbr': 'P/A',
+          'color': Color(0xFFFFF6E0),
+          'circle': Color(0xFFFFB300)
+        };
+      }
+    }
+
+    // Map full compoff dates (PH)
+    if (data['fullCompoffDates'] != null) {
+      for (String date in data['fullCompoffDates']) {
+        statusMap[date] = {
+          'status': 'Present on Holiday',
+          'abbr': 'PH',
+          'color': Color(0xFFC8F7F7),
+          'circle': Color(0xFF4DD0E1)
+        };
+      }
+    }
+
+    // Map half compoff dates (PH/A)
+    if (data['halfCompoffDates'] != null) {
+      for (String date in data['halfCompoffDates']) {
+        statusMap[date] = {
+          'status': 'Half Day on Holiday',
+          'abbr': 'PH/A',
+          'color': Color(0xFFFFF6E0),
+          'circle': Color(0xFFFFB300)
+        };
+      }
+    }
+
+    // Map weekly off dates (Holiday)
+    if (data['weeklyOffDates'] != null) {
+      for (String date in data['weeklyOffDates']) {
+        statusMap[date] = {
+          'status': 'Holiday',
+          'abbr': 'H',
+          'color': Color(0xFFF3F3F3),
+          'circle': Color(0xFFBDBDBD)
+        };
+      }
+    }
+
+    // Map absent dates (Absent)
+    if (data['absentDates'] != null) {
+      for (String date in data['absentDates']) {
+        statusMap[date] = {
+          'status': 'Absent',
+          'abbr': 'A',
+          'color': Color(0xFFFFD6D6),
+          'circle': Color(0xFFFF3B30)
+        };
+      }
+    }
+
+    // Add today's status if it's the current month
+    final today = DateTime.now();
+    if (today.year == _currentDate.year && today.month == _currentDate.month) {
+      final todayKey = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      if (!statusMap.containsKey(todayKey)) {
+        statusMap[todayKey] = {
+          'status': 'In Progress',
+          'abbr': 'P',
+          'color': Colors.orange,
+          'circle': Colors.orange
+        };
+      }
+    }
+  }
+
+  void _updateWorkHoursData(Map<String, dynamic> data) {
+    workHoursData.clear();
+
+    // Add present dates with default work hours
+    if (data['presentDates'] != null) {
+      for (String date in data['presentDates']) {
+        workHoursData[date] = {
+          'checkIn': '9:00 AM',
+          'checkOut': '5:30 PM',
+          'total': '8h 30m',
+          'status': 'Present'
+        };
+      }
+    }
+
+    // Add half day leave dates
+    if (data['halfDayLeaveDates'] != null) {
+      for (String date in data['halfDayLeaveDates']) {
+        workHoursData[date] = {
+          'checkIn': '9:00 AM',
+          'checkOut': '1:00 PM',
+          'total': '4h 0m',
+          'status': 'Half Day'
+        };
+      }
+    }
+
+    // Add full compoff dates
+    if (data['fullCompoffDates'] != null) {
+      for (String date in data['fullCompoffDates']) {
+        workHoursData[date] = {
+          'checkIn': '9:00 AM',
+          'checkOut': '5:30 PM',
+          'total': '8h 30m',
+          'status': 'Present on Holiday'
+        };
+      }
+    }
+
+    // Add half compoff dates
+    if (data['halfCompoffDates'] != null) {
+      for (String date in data['halfCompoffDates']) {
+        workHoursData[date] = {
+          'checkIn': '9:00 AM',
+          'checkOut': '1:00 PM',
+          'total': '4h 0m',
+          'status': 'Half Day on Holiday'
+        };
+      }
+    }
+
+    // Add absent dates
+    if (data['absentDates'] != null) {
+      for (String date in data['absentDates']) {
+        workHoursData[date] = {
+          'status': 'Absent'
+        };
+      }
+    }
+
+    // Add full leave dates
+    if (data['fullLeaveDates'] != null) {
+      for (String date in data['fullLeaveDates']) {
+        workHoursData[date] = {
+          'status': 'Absent'
+        };
+      }
+    }
+
+    // Add weekly off dates
+    if (data['weeklyOffDates'] != null) {
+      for (String date in data['weeklyOffDates']) {
+        workHoursData[date] = {
+          'status': 'Holiday'
+        };
+      }
+    }
+
+    // Add today's status if it's the current month
+    final today = DateTime.now();
+    if (today.year == _currentDate.year && today.month == _currentDate.month) {
+      final todayKey = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      if (!workHoursData.containsKey(todayKey)) {
+        workHoursData[todayKey] = {
+          'checkIn': '10:00 AM',
+          'status': 'In Progress'
+        };
+      }
+    }
+  }
 
   String _monthName(int month) {
     const List<String> monthNames = [
@@ -189,7 +415,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.arrow_back_ios, size: 18, color: Colors.black),
-                onPressed: _previousMonth,
+                onPressed: _isLoading ? null : _previousMonth,
               ),
               Text(
                 '${_monthName(firstDayOfMonth.month)} ${firstDayOfMonth.year}',
@@ -197,7 +423,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.black),
-                onPressed: _nextMonth,
+                onPressed: _isLoading ? null : _nextMonth,
               ),
             ],
           ),
@@ -209,69 +435,84 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 .toList(),
           ),
           const SizedBox(height: 8),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-            ),
-            itemCount: 42,
-            itemBuilder: (context, index) {
-              DateTime? day = calendarDays[index];
-              String dateKey = day != null ? _dateKey(day) : '';
-              var legend = statusMap[dateKey];
-              Color? color = legend != null ? (legend['circle'] ?? Colors.orange) : null;
-              bool isSelected = _selectedDate != null && day != null &&
-                day.day == _selectedDate!.day &&
-                day.month == _selectedDate!.month &&
-                day.year == _selectedDate!.year;
-              bool isToday = day != null &&
-                day.day == DateTime.now().day &&
-                day.month == DateTime.now().month &&
-                day.year == DateTime.now().year;
+          if (_isLoading)
+            Container(
+              height: 200,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Loading attendance data...', style: TextStyle(color: Colors.grey[600])),
+                  ],
+                ),
+              ),
+            )
+          else
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 7,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+              ),
+              itemCount: 42,
+              itemBuilder: (context, index) {
+                DateTime? day = calendarDays[index];
+                String dateKey = day != null ? _dateKey(day) : '';
+                var legend = statusMap[dateKey];
+                Color? color = legend != null ? (legend['circle'] ?? Colors.orange) : null;
+                bool isSelected = _selectedDate != null && day != null &&
+                  day.day == _selectedDate!.day &&
+                  day.month == _selectedDate!.month &&
+                  day.year == _selectedDate!.year;
+                bool isToday = day != null &&
+                  day.day == DateTime.now().day &&
+                  day.month == DateTime.now().month &&
+                  day.year == DateTime.now().year;
 
-              return day == null
-                  ? const SizedBox.shrink()
-                  : GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          if (_selectedDate != null && _selectedDate!.day == day.day && _selectedDate!.month == day.month && _selectedDate!.year == day.year) {
-                            _selectedDate = null; // Toggle off
-                          } else {
-                            _selectedDate = day;
-                          }
-                        });
-                      },
-                      child: Center(
-                        child: AnimatedContainer(
-                          duration: Duration(milliseconds: 120),
-                          width: isSelected ? 34 : 28,
-                          height: isSelected ? 34 : 28,
-                          decoration: BoxDecoration(
-                            color: color ?? Colors.transparent,
-                            shape: BoxShape.circle,
-                            boxShadow: isSelected
-                                ? [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))]
-                                : [],
-                            border: isSelected ? Border.all(color: Colors.black, width: 2) : null,
-                          ),
-                          child: Center(
-                            child: Text(
-                              day.day.toString(),
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.black,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                return day == null
+                    ? const SizedBox.shrink()
+                    : GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            if (_selectedDate != null && _selectedDate!.day == day.day && _selectedDate!.month == day.month && _selectedDate!.year == day.year) {
+                              _selectedDate = null; // Toggle off
+                            } else {
+                              _selectedDate = day;
+                            }
+                          });
+                        },
+                        child: Center(
+                          child: AnimatedContainer(
+                            duration: Duration(milliseconds: 120),
+                            width: isSelected ? 34 : 28,
+                            height: isSelected ? 34 : 28,
+                            decoration: BoxDecoration(
+                              color: color ?? Colors.transparent,
+                              shape: BoxShape.circle,
+                              boxShadow: isSelected
+                                  ? [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))]
+                                  : [],
+                              border: isSelected ? Border.all(color: Colors.black, width: 2) : null,
+                            ),
+                            child: Center(
+                              child: Text(
+                                day.day.toString(),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.black,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-            },
-          ),
+                      );
+              },
+            ),
           const SizedBox(height: 12),
         ],
       ),
@@ -282,12 +523,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     setState(() {
       _currentDate = DateTime(_currentDate.year, _currentDate.month - 1, 1);
     });
+    _fetchAttendanceData();
   }
 
   void _nextMonth() {
     setState(() {
       _currentDate = DateTime(_currentDate.year, _currentDate.month + 1, 1);
     });
+    _fetchAttendanceData();
   }
 
   Widget _buildPlayCard(DateTime date, Map<String, String> data) {
