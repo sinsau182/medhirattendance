@@ -1368,16 +1368,14 @@ class _ManualCheckInScreenState extends State<ManualCheckInScreen> {
       // Create multipart request
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.0.200:8082/manager/checkin'),
+        Uri.parse('http://192.168.0.200:8082/employee/manual-checkin'),
       );
 
       // Add authorization header
       request.headers['Authorization'] = 'Bearer $token';
 
       // Add manager ID, employee ID, and employee name
-      request.fields['managerId'] = managerId;
-      request.fields['employeeId'] = employeeId;
-      request.fields['employeeName'] = employeeName;
+      request.fields['empId'] = employeeId;
 
       // Add image file
       request.files.add(
