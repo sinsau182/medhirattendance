@@ -334,18 +334,27 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final dailyAttendance = data['dailyAttendance'];
-        final logs = dailyAttendance['logs'] as List;
-        for (var log in logs) {
-          final original = DateTime.parse(log['timestamp']);
-          final adjusted = original.add(Duration(hours: 5, minutes: 30));
-          log['timestamp'] = adjusted.toIso8601String();
+        final dailyAttendanceArray = data['dailyAttendance'] as List;
+        
+        // Apply timezone adjustment to all timestamps
+        for (var attendance in dailyAttendanceArray) {
+          final original = DateTime.parse(attendance['timestamp']);
+          attendance['timestamp'] = original.toIso8601String();
         }
+        
         setState(() {
-          this.dailyAttendance = dailyAttendance;
-          final logs = dailyAttendance['logs'] as List<dynamic>?;
-          isCheckedIn = logs != null && logs.isNotEmpty && logs.last['type'] == 'checkin';
-          if (isCheckedIn && logs != null && logs.isNotEmpty) {
+          this.dailyAttendance = {
+            'logs': dailyAttendanceArray, // Keep the logs key for backward compatibility
+            'employeeId': employeeId,
+            'date': today,
+            'firstCheckin': data['firstCheckin'],
+            'latestCheckin': data['latestCheckin'],
+            'workingHoursTillNow': data['workingHoursTillNow'],
+          };
+          
+          final logs = dailyAttendanceArray;
+          isCheckedIn = logs.isNotEmpty && logs.last['type'] == 'checkin';
+          if (isCheckedIn && logs.isNotEmpty) {
             sessionStartTime = DateTime.parse(logs.last['timestamp']);
           } else {
             sessionStartTime = null;
@@ -357,6 +366,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
             'logs': [],
             'employeeId': employeeId,
             'date': today,
+            'firstCheckin': null,
+            'latestCheckin': null,
+            'workingHoursTillNow': '00:00:00',
           };
         });
       }
@@ -366,6 +378,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
           'logs': [],
           'employeeId': employeeId,
           'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+          'firstCheckin': null,
+          'latestCheckin': null,
+          'workingHoursTillNow': '00:00:00',
         };
       });
     } finally {

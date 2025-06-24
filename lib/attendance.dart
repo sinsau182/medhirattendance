@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -16,10 +17,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   DateTime? _selectedDate; // Track which date's card is open
   bool _isLoading = true;
   Map<String, dynamic>? _attendanceData;
+  Timer? _updateTimer; // Timer to update running times
 
   // Legend/status mapping for demo
   final List<Map<String, dynamic>> legendList = [
     {'abbr': 'P', 'color': Color(0xFFC8F7D8), 'circle': Color(0xFF34C759), 'label': 'Present'},
+    {'abbr': 'PL', 'color': Color(0xFFE5E5CC), 'circle': Color(0xFFAFAF8D), 'label': 'Present with Leave'},
     {'abbr': 'PH', 'color': Color(0xFFC8F7F7), 'circle': Color(0xFF4DD0E1), 'label': 'Present on Holiday'},
     {'abbr': 'P/A', 'color': Color(0xFFFFF6E0), 'circle': Color(0xFFFFB300), 'label': 'Half Day'},
     {'abbr': 'PH/A', 'color': Color(0xFFFFF6E0), 'circle': Color(0xFFFFB300), 'label': 'Half Day on Holiday'},
@@ -33,12 +36,39 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Map<String, Map<String, dynamic>> statusMap = {};
 
   // Dummy work hours data for demonstration
-  Map<String, Map<String, String>> workHoursData = {};
+  Map<String, Map<String, dynamic>> workHoursData = {};
 
   @override
   void initState() {
     super.initState();
     _fetchAttendanceData();
+    _startUpdateTimer();
+  }
+
+  @override
+  void dispose() {
+    _updateTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startUpdateTimer() {
+    _updateTimer?.cancel();
+    _updateTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      if (mounted) {
+        // Only update if we have a selected date and it's the current day with active session
+        if (_selectedDate != null) {
+          String selectedDateKey = _dateKey(_selectedDate!);
+          final data = workHoursData[selectedDateKey];
+          if (data != null && 
+              data['isCurrentDay'] == 'true' && 
+              data['isCurrentlyCheckedIn'] == 'true') {
+            setState(() {
+              // This will trigger a rebuild to update running times for current day only
+            });
+          }
+        }
+      }
+    });
   }
 
   Future<void> _fetchAttendanceData() async {
@@ -101,8 +131,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         statusMap[date] = {
           'status': 'Present',
           'abbr': 'P',
-          'color': Color(0xFFC8F7D8),
-          'circle': Color(0xFF34C759)
+          'color': Color(0xFFCCFFCC),
+          'circle': Color(0xFF5cbf85)
         };
       }
     }
@@ -111,10 +141,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (data['fullLeaveDates'] != null) {
       for (String date in data['fullLeaveDates']) {
         statusMap[date] = {
-          'status': 'Absent',
-          'abbr': 'A',
-          'color': Color(0xFFFFD6D6),
-          'circle': Color(0xFFFF3B30)
+          'status': 'Present with Leave',
+          'abbr': 'PL',
+          'color': Color(0xFFE5E5CC),
+          'circle': Color(0xFFCCFFCC)
         };
       }
     }
@@ -125,7 +155,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         statusMap[date] = {
           'status': 'Half Day',
           'abbr': 'P/A',
-          'color': Color(0xFFFFF6E0),
+          'color': Color(0xFFFFFFCC),
           'circle': Color(0xFFFFB300)
         };
       }
@@ -137,7 +167,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         statusMap[date] = {
           'status': 'Present on Holiday',
           'abbr': 'PH',
-          'color': Color(0xFFC8F7F7),
+          'color': Color(0xFF5cbf85),
           'circle': Color(0xFF4DD0E1)
         };
       }
@@ -149,7 +179,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         statusMap[date] = {
           'status': 'Half Day on Holiday',
           'abbr': 'PH/A',
-          'color': Color(0xFFFFF6E0),
+          'color': Color(0xFFffcc80),
           'circle': Color(0xFFFFB300)
         };
       }
@@ -161,8 +191,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         statusMap[date] = {
           'status': 'Holiday',
           'abbr': 'H',
-          'color': Color(0xFFF3F3F3),
-          'circle': Color(0xFFBDBDBD)
+          'color': Color(0xFFE0E0E0),
+          'circle': Color(0xFFE0E0E0)
         };
       }
     }
@@ -173,8 +203,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         statusMap[date] = {
           'status': 'Absent',
           'abbr': 'A',
-          'color': Color(0xFFFFD6D6),
-          'circle': Color(0xFFFF3B30)
+          'color': Color(0xFFFFCCCC),
+          'circle': Color(0xFFFFCCCC)
         };
       }
     }
@@ -197,15 +227,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   void _updateWorkHoursData(Map<String, dynamic> data) {
     workHoursData.clear();
 
-    // Add present dates with default work hours
+    // Add present dates with real attendance data
     if (data['presentDates'] != null) {
       for (String date in data['presentDates']) {
-        workHoursData[date] = {
-          'checkIn': '9:00 AM',
-          'checkOut': '5:30 PM',
-          'total': '8h 30m',
-          'status': 'Present'
-        };
+        // Fetch detailed attendance data for this date
+        _fetchDetailedAttendanceData(date);
       }
     }
 
@@ -258,7 +284,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (data['fullLeaveDates'] != null) {
       for (String date in data['fullLeaveDates']) {
         workHoursData[date] = {
-          'status': 'Absent'
+          'status': 'Present with Leave'
         };
       }
     }
@@ -282,6 +308,141 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           'status': 'In Progress'
         };
       }
+    }
+  }
+
+  Future<void> _fetchDetailedAttendanceData(String date) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final employeeId = prefs.getString('employeeId');
+      final token = prefs.getString('authToken');
+
+      if (employeeId == null || token == null) {
+        print('Error: No employee ID or token found');
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('http://192.168.0.200:8082/employee/daily/$employeeId/$date'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final dailyAttendance = data['dailyAttendance'] as List;
+        final firstCheckin = data['firstCheckin'];
+        final latestCheckin = data['latestCheckin'];
+        final lastCheckout = data['lastCheckout'];
+        final workingHoursTillNow = data['workingHoursTillNow'];
+
+        if (dailyAttendance.isNotEmpty) {
+          // Format first check-in time
+          String checkInTime = '--';
+          if (firstCheckin != null) {
+            final checkInDateTime = DateTime.parse(firstCheckin);
+            checkInTime = DateFormat('hh:mm a').format(checkInDateTime);
+          }
+
+          // Determine check-out time and total working hours
+          String checkOutTime = '--';
+          String totalHours = '--';
+          bool isCurrentlyCheckedIn = false;
+          bool isCurrentDay = false;
+
+          // Check if this is the current day
+          final currentDate = DateTime.now();
+          final dateParts = date.split('-');
+          final dateYear = int.parse(dateParts[0]);
+          final dateMonth = int.parse(dateParts[1]);
+          final dateDay = int.parse(dateParts[2]);
+          isCurrentDay = currentDate.year == dateYear && 
+                        currentDate.month == dateMonth && 
+                        currentDate.day == dateDay;
+
+          // Check if the last entry is a check-in (meaning currently checked in)
+          if (dailyAttendance.isNotEmpty && dailyAttendance.last['type'] == 'checkin') {
+            isCurrentlyCheckedIn = true;
+            checkOutTime = 'Running'; // Show running icon
+          } else if (lastCheckout != null) {
+            final checkOutDateTime = DateTime.parse(lastCheckout);
+            checkOutTime = DateFormat('hh:mm a').format(checkOutDateTime);
+          }
+
+          // Calculate total working hours
+          if (workingHoursTillNow != null) {
+            if (isCurrentDay && isCurrentlyCheckedIn && lastCheckout != null) {
+              // For current day and currently checked in: workingHoursTillNow + (current time - lastCheckout)
+              final lastCheckoutTime = DateTime.parse(lastCheckout);
+              final currentTime = DateTime.now();
+              final additionalTime = currentTime.difference(lastCheckoutTime);
+              
+              // Parse workingHoursTillNow (format: "HH:MM:SS")
+              final parts = workingHoursTillNow.split(':');
+              final hours = int.parse(parts[0]);
+              final minutes = int.parse(parts[1]);
+              final seconds = int.parse(parts[2]);
+              
+              final totalDuration = Duration(
+                hours: hours,
+                minutes: minutes,
+                seconds: seconds,
+              ) + additionalTime;
+              
+              totalHours = '${totalDuration.inHours}h ${totalDuration.inMinutes.remainder(60)}m';
+            } else if (isCurrentDay && isCurrentlyCheckedIn && latestCheckin != null) {
+              // For current day and currently checked in but no last checkout: calculate from latest checkin
+              final latestCheckinTime = DateTime.parse(latestCheckin);
+              final currentTime = DateTime.now();
+              final totalDuration = currentTime.difference(latestCheckinTime);
+              
+              totalHours = '${totalDuration.inHours}h ${totalDuration.inMinutes.remainder(60)}m';
+            } else {
+              // For past days or completed sessions: just show workingHoursTillNow as is
+              final parts = workingHoursTillNow.split(':');
+              final hours = int.parse(parts[0]);
+              final minutes = int.parse(parts[1]);
+              totalHours = '${hours}h ${minutes}m';
+            }
+          }
+
+          setState(() {
+            workHoursData[date] = {
+              'checkIn': checkInTime,
+              'checkOut': checkOutTime,
+              'total': totalHours,
+              'status': 'Present',
+              'isCurrentlyCheckedIn': isCurrentlyCheckedIn.toString(),
+              'isCurrentDay': isCurrentDay.toString(),
+              'rawData': data, // Store raw data for real-time calculations
+            };
+          });
+        }
+      } else {
+        print('Error fetching detailed attendance data: ${response.statusCode}');
+        // Fallback to default data
+        setState(() {
+          workHoursData[date] = {
+            'checkIn': '--',
+            'checkOut': '--',
+            'total': '--',
+            'status': 'Present'
+          };
+        });
+      }
+    } catch (e) {
+      print('Error fetching detailed attendance data: $e');
+      // Fallback to default data
+      setState(() {
+        workHoursData[date] = {
+          'checkIn': '--',
+          'checkOut': '--',
+          'total': '--',
+          'status': 'Present'
+        };
+      });
     }
   }
 
@@ -310,7 +471,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     DateTime today = DateTime.now();
     DateTime? visibleDate = _selectedDate;
     String? visibleDateKey = visibleDate != null ? _dateKey(visibleDate) : null;
-    Map<String, String>? visibleData = visibleDateKey != null ? workHoursData[visibleDateKey] : null;
+    Map<String, dynamic>? visibleData = visibleDateKey != null ? workHoursData[visibleDateKey] : null;
 
     return Scaffold(
       backgroundColor: Color(0xFFF4FBFB),
@@ -482,6 +643,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                               _selectedDate = null; // Toggle off
                             } else {
                               _selectedDate = day;
+                              // Fetch detailed attendance data if this is a present date
+                              if (statusMap.containsKey(dateKey) && statusMap[dateKey]!['status'] == 'Present') {
+                                _fetchDetailedAttendanceData(dateKey);
+                              }
                             }
                           });
                         },
@@ -533,11 +698,61 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     _fetchAttendanceData();
   }
 
-  Widget _buildPlayCard(DateTime date, Map<String, String> data) {
+  String _calculateRealTimeWorkingHours(Map<String, dynamic> data) {
+    // Only apply real-time calculations for current day and currently checked in
+    if (data['isCurrentDay'] != 'true' || data['isCurrentlyCheckedIn'] != 'true') {
+      return data['total'] ?? '--';
+    }
+
+    final rawData = data['rawData'];
+    if (rawData == null) {
+      return data['total'] ?? '--';
+    }
+
+    final workingHoursTillNow = rawData['workingHoursTillNow'];
+    final lastCheckout = rawData['lastCheckout'];
+    final latestCheckin = rawData['latestCheckin'];
+
+    if (workingHoursTillNow != null) {
+      if (lastCheckout != null) {
+        // For current day and currently checked in: workingHoursTillNow + (current time - lastCheckout)
+        final lastCheckoutTime = DateTime.parse(lastCheckout);
+        final currentTime = DateTime.now();
+        final additionalTime = currentTime.difference(lastCheckoutTime);
+        
+        // Parse workingHoursTillNow (format: "HH:MM:SS")
+        final parts = workingHoursTillNow.split(':');
+        final hours = int.parse(parts[0]);
+        final minutes = int.parse(parts[1]);
+        final seconds = int.parse(parts[2]);
+        
+        final totalDuration = Duration(
+          hours: hours,
+          minutes: minutes,
+          seconds: seconds,
+        ) + additionalTime;
+        
+        return '${totalDuration.inHours}h ${totalDuration.inMinutes.remainder(60)}m';
+      } else if (latestCheckin != null) {
+        // For current day and currently checked in but no last checkout: calculate from latest checkin
+        final latestCheckinTime = DateTime.parse(latestCheckin);
+        final currentTime = DateTime.now();
+        final totalDuration = currentTime.difference(latestCheckinTime);
+        
+        return '${totalDuration.inHours}h ${totalDuration.inMinutes.remainder(60)}m';
+      }
+    }
+
+    return data['total'] ?? '--';
+  }
+
+  Widget _buildPlayCard(DateTime date, Map<String, dynamic> data) {
     String status = data['status'] ?? 'In Progress';
     String? checkIn = data['checkIn'];
     String? checkOut = data['checkOut'];
     String? total = data['total'];
+    bool isCurrentlyCheckedIn = data['isCurrentlyCheckedIn'] == 'true';
+    
     Color statusColor;
     String abbr = '';
     IconData statusIcon;
@@ -546,6 +761,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       case 'Present':
         statusColor = Colors.green;
         abbr = 'P';
+        statusIcon = Icons.check_circle;
+        break;
+      case 'Present with Leave':
+        statusColor = Color(0xFFE5E5CC);
+        abbr = 'PL';
         statusIcon = Icons.check_circle;
         break;
       case 'Present on Holiday':
@@ -671,7 +891,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               SizedBox(width: 8),
               Text('Check-Out:', style: TextStyle(fontWeight: FontWeight.w500)),
               SizedBox(width: 8),
-              Text(checkOut ?? '--', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              if (checkOut == 'Running')
+                Row(
+                  children: [
+                    Icon(Icons.access_time, color: Colors.blue, size: 20),
+                    SizedBox(width: 4),
+                    Text('Running', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue)),
+                  ],
+                )
+              else
+                Text(checkOut ?? '--', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             ],
           ),
           SizedBox(height: 10),
@@ -681,7 +910,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               SizedBox(width: 8),
               Text('Total:', style: TextStyle(fontWeight: FontWeight.w500)),
               SizedBox(width: 8),
-              Text(total ?? '--', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text(_calculateRealTimeWorkingHours(data), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             ],
           ),
         ],
